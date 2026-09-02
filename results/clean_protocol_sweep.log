@@ -1,0 +1,65 @@
+host=lun-mac platform=Darwin-arm64 threads=12
+llama-bench: /opt/homebrew/bin/llama-bench
+23 models x 1 ngl levels = 23 cells
+depths=[0, 4096, 16384] prompt=512 gen=128 reps=5 settle=45.0s max_cv=3.0% max_load=18
+output: /Users/lun/Projects/O1A/paper/results/measurements_lun-mac.csv  (132 cells already done)
+
+  Muse-Glimmer-30B-UD-Q4_K_XL                          Q4_K      15.88 GB  27.85B total / 27.85B active
+  NVIDIA-Nemotron-3-Nano-4B-Q4_K_M                     Q4_K_M     2.84 GB   3.97B total /  3.97B active
+  Nemotron-3-Nano-30B-A3B-Q4_K_M                       Q4_K_M    24.57 GB  31.58B total /  3.58B active  [MoE]
+  Qwen3.5-4B-Q4_K_M                                    Q4_K_M     2.74 GB   4.21B total /  4.21B active
+  Qwen3.5-4B-Q8_0                                      Q8_0       4.48 GB   4.21B total /  4.21B active
+  Qwen3.5-9B-Q4_K_M                                    Q4_K_M     5.68 GB   8.95B total /  8.95B active
+  Qwen3.5-9B-Q8_0                                      Q8_0       9.53 GB   8.95B total /  8.95B active
+  Qwen3.6-35B-A3B-UD-Q4_K_M                            Q4_K_M    22.13 GB  34.66B total /  3.45B active  [MoE]
+  Qwen3.8-27B-Q8_0                                     Q8_0      29.05 GB  27.32B total / 27.32B active
+  Qwen3.8-27B-UD-IQ2_XXS                               IQ2_XXS    7.27 GB  26.90B total / 26.90B active
+  Qwen3.8-27B-UD-IQ3_XXS                               IQ3_XXS   10.93 GB  27.32B total / 27.32B active
+  Qwen3.8-27B-UD-Q2_K_XL                               Q2_K       9.83 GB  27.32B total / 27.32B active
+  Qwen3.8-27B-UD-Q3_K_XL                               Q3_K      13.15 GB  27.32B total / 27.32B active
+  Qwen3.8-27B-UD-Q4_K_XL                               Q4_K      17.56 GB  27.32B total / 27.32B active
+  Qwen3.8-27B-UD-Q5_K_XL                               Q5_K      20.88 GB  27.32B total / 27.32B active
+  Qwen3.8-27B-UD-Q6_K_XL                               Q6_K      25.30 GB  27.32B total / 27.32B active
+  SmolLM3-Q4_K_M                                       Q4_K_M     1.92 GB   3.08B total /  3.08B active
+  SmolLM3-Q8_0                                         Q8_0       3.28 GB   3.08B total /  3.08B active
+  gemma-4-12b-it-qat-q4_0                              Q4_0       6.98 GB  11.91B total / 11.91B active
+  gemma-4-26B-A4B-it-UD-Q4_K_M                         Q4_K_M    16.95 GB  25.23B total /  3.82B active  [MoE]
+  gpt-oss-120b-MXFP4                                   MXFP4     63.39 GB 116.83B total /  5.71B active  [MoE]
+  gpt-oss-20b-MXFP4                                    MXFP4     12.11 GB  20.91B total /  4.19B active  [MoE]
+  inclusionAI_Ling-mini-2.0-Q4_K_M                     Q4_K_M     9.94 GB  16.26B total /  1.43B active  [MoE]
+[1/23] Muse-Glimmer-30B-UD-Q4_K_XL ngl=99 ... ok (998s) pp=237 tg@0=26.2 tg@4096=23.3 tg@16384=22.5 load=9->7 cv=3.0%  [CV 3.0% after 3 attempts]
+[2/23] NVIDIA-Nemotron-3-Nano-4B-Q4_K_M ngl=99 ... ok (48s) pp=1259 tg@0=93.3 tg@4096=91.4 tg@16384=84.9 load=9->8 cv=0.4%
+[3/23] Nemotron-3-Nano-30B-A3B-Q4_K_M ngl=99 ... ok (62s) pp=1204 tg@0=92.1 tg@4096=90.7 tg@16384=85.2 load=10->9 cv=0.7%
+[4/23] Qwen3.5-4B-Q4_K_M ngl=99 ... ok (47s) pp=1464 tg@0=101.6 tg@4096=97.1 tg@16384=85.1 load=8->9 cv=1.2%
+[5/23] Qwen3.5-4B-Q8_0 ngl=99 ... ok (52s) pp=1553 tg@0=77.3 tg@4096=74.7 tg@16384=67.3 load=8->9 cv=0.5%
+[6/23] Qwen3.5-9B-Q4_K_M ngl=99 ... ok (79s) pp=819 tg@0=66.6 tg@4096=63.0 tg@16384=56.6 load=8->17 cv=2.8%
+[7/23] Qwen3.5-9B-Q8_0 ngl=99 ...     load 39 > 18, waiting for the machine to settle (up to 30 min)
+    load 16, proceeding (waited 5.0 min)
+ok (289s) pp=865 tg@0=46.5 tg@4096=45.3 tg@16384=42.1 load=16->18 cv=2.2%
+[8/23] Qwen3.6-35B-A3B-UD-Q4_K_M ngl=99 ... ok (64s) pp=1414 tg@0=80.8 tg@4096=78.4 tg@16384=72.1 load=16->20 cv=1.1%
+[9/23] Qwen3.8-27B-Q8_0 ngl=99 ...     load 19 > 18, waiting for the machine to settle (up to 30 min)
+    load 17, proceeding (waited 0.5 min)
+ok (313s) pp=239 tg@0=14.9 tg@4096=14.4 tg@16384=13.6 load=17->16 cv=0.7%
+[10/23] Qwen3.8-27B-UD-IQ2_XXS ngl=99 ...     load 19 > 18, waiting for the machine to settle (up to 30 min)
+    load 17, proceeding (waited 1.5 min)
+ok (261s) pp=240 tg@0=23.6 tg@4096=20.4 tg@16384=19.7 load=17->15 cv=2.7%
+[11/23] Qwen3.8-27B-UD-IQ3_XXS ngl=99 ... ok (245s) pp=239 tg@0=23.5 tg@4096=22.2 tg@16384=19.6 load=15->15 cv=1.7%
+[12/23] Qwen3.8-27B-UD-Q2_K_XL ngl=99 ... ok (238s) pp=235 tg@0=24.1 tg@4096=23.1 tg@16384=21.3 load=11->13 cv=2.4%
+[13/23] Qwen3.8-27B-UD-Q3_K_XL ngl=99 ... ok (1005s) pp=242 tg@0=22.8 tg@4096=21.9 tg@16384=17.5 load=11->14 cv=2.9%
+[14/23] Qwen3.8-27B-UD-Q4_K_XL ngl=99 ... ok (1013s) pp=225 tg@0=20.5 tg@4096=19.7 tg@16384=16.8 load=13->21 cv=2.1%
+[15/23] Qwen3.8-27B-UD-Q5_K_XL ngl=99 ... ok (272s) pp=225 tg@0=18.9 tg@4096=18.3 tg@16384=15.8 load=18->23 cv=2.7%
+[16/23] Qwen3.8-27B-UD-Q6_K_XL ngl=99 ...     load 20 > 18, waiting for the machine to settle (up to 30 min)
+    load 17, proceeding (waited 0.5 min)
+ok (281s) pp=239 tg@0=16.9 tg@4096=15.9 tg@16384=15.0 load=17->17 cv=1.4%
+[17/23] SmolLM3-Q4_K_M ngl=99 ... ok (36s) pp=2136 tg@0=169.5 tg@4096=149.5 tg@16384=115.2 load=14->13 cv=0.5%
+[18/23] SmolLM3-Q8_0 ngl=99 ... ok (42s) pp=2239 tg@0=118.9 tg@4096=109.4 tg@16384=88.2 load=14->14 cv=1.0%
+[19/23] gemma-4-12b-it-qat-q4_0 ngl=99 ... ok (106s) pp=590 tg@0=54.3 tg@4096=49.9 tg@16384=45.3 load=16->20 cv=1.5%
+[20/23] gemma-4-26B-A4B-it-UD-Q4_K_M ngl=99 ...     load 21 > 18, waiting for the machine to settle (up to 30 min)
+    load 17, proceeding (waited 2.5 min)
+ok (60s) pp=1418 tg@0=89.2 tg@4096=82.9 tg@16384=75.4 load=17->17 cv=0.4%
+[21/23] gpt-oss-120b-MXFP4 ngl=99 ... FAIL (56s): exit 1: load_backend: loaded CPU backend from /opt/homebrew/Cellar/ggml/0.22.0/libexec/libggml-cpu-apple_m4.so | test_prompt: failed to decode prompt batch, res = -3 | llama_bench: error: failed to run prompt
+[22/23] gpt-oss-20b-MXFP4 ngl=99 ... ok (47s) pp=1590 tg@0=124.3 tg@4096=118.3 tg@16384=102.8 load=12->12 cv=0.7%
+[23/23] inclusionAI_Ling-mini-2.0-Q4_K_M ngl=99 ... ok (25s) pp=4208 tg@0=242.3 tg@4096=219.7 tg@16384=175.6 load=12->13 cv=1.2%
+
+22 cells measured, 0 skipped (already done), 1 failed
+-> /Users/lun/Projects/O1A/paper/results/measurements_lun-mac.csv

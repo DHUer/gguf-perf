@@ -1,0 +1,13 @@
+host=lun-mac platform=Darwin-arm64 threads=12
+llama-bench: /opt/homebrew/bin/llama-bench
+2 models x 1 ngl levels = 2 cells
+depths=[0, 4096, 16384] prompt=512 gen=128 reps=5 settle=45.0s
+output: /Users/lun/Projects/O1A/paper/results/measurements_lun-mac.csv  (132 cells already done)
+
+  Qwen3.5-4B-Q4_K_M                                    Q4_K_M     2.74 GB   4.21B total /  4.21B active
+  Qwen3.5-4B-Q8_0                                      Q8_0       4.48 GB   4.21B total /  4.21B active
+[1/2] Qwen3.5-4B-Q4_K_M ngl=99 ... ok (386s) pp=1451 tg@0=99.8 tg@4096=92.6 tg@16384=80.3 load=16->21 cv=2.8%
+[2/2] Qwen3.5-4B-Q8_0 ngl=99 ... ok (54s) pp=1535 tg@0=76.0 tg@4096=73.9 tg@16384=65.2 load=19->17 cv=0.8%
+
+2 cells measured, 0 skipped (already done), 0 failed
+-> /Users/lun/Projects/O1A/paper/results/measurements_lun-mac.csv

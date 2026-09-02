@@ -1,0 +1,5 @@
+model,split,n,MAPE_%,median_APE_%,p90_APE_%,max_APE_%
+P1 eta_p per host,train,45,22.93,18.1,54.53,83.42
+P1 eta_p per host,test,12,24.57,16.47,54.0,96.13
+P2 eta_p per host x quant,train,45,18.72,15.34,45.29,83.42
+P2 eta_p per host x quant,test,12,18.8,12.69,35.69,70.67

@@ -1,0 +1,25 @@
+[2026-08-30 18:38:37] campaign start on lun-mac (Darwin-arm64) pid 60217: max_iters=999 settle=45.0s
+[2026-08-30 18:38:47] calibration ok
+[2026-08-30 18:38:47] iter 1: fetching one model
+[2026-08-30 18:59:53] iter 1: 21 models on disk (was 20)
+[2026-08-30 18:59:53] iter 1: sweeping
+[2026-08-30 19:19:35] iter 1: 2 models still to fetch
+[2026-08-30 19:19:35] iter 2: fetching one model
+[2026-08-30 19:56:51] iter 2: 22 models on disk (was 21)
+[2026-08-30 19:56:51] iter 2: sweeping
+[2026-08-30 20:00:36] iter 2: 1 models still to fetch
+[2026-08-30 20:00:36] iter 3: fetching one model
+[2026-08-30 21:21:11] iter 3: 23 models on disk (was 22)
+[2026-08-30 21:21:11] iter 3: sweeping
+[2026-08-30 21:25:12] all models fetched and swept
+[2026-08-30 21:25:12] running analysis suite
+[2026-08-30 21:28:49] wrote /Users/lun/Projects/O1A/paper/results/STATUS.md
+[2026-08-30 21:28:49] campaign end
+=== prediction error ===
+                              model split  n  MAPE_%  median_APE_%  p90_APE_%  max_APE_%
+     B0 uncalibrated (eta=1, total) train 51    40.2          29.7       85.0      115.0
+     B0 uncalibrated (eta=1, total)  test 12    62.7          82.8       89.1       91.7
+        B1 calibrated, total params train 51    56.7          11.1      206.7      624.0
+        B1 calibrated, total params  test 12    64.7          58.7       74.3      242.0
+B2 calibrated, active params (ours) train 51    18.9           6.5       62.7       96.1
+B2 calibrated, active params (ours)  test 12    33.9          14.0       81.2       82.6

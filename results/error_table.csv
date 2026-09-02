@@ -1,0 +1,7 @@
+model,split,n,MAPE_%,median_APE_%,p90_APE_%,max_APE_%
+"B0 uncalibrated (eta=1, total)",train,45,38.54,19.37,78.07,192.72
+"B0 uncalibrated (eta=1, total)",test,12,47.21,49.94,83.41,83.82
+"B1 calibrated, total params",train,45,18.33,5.38,72.08,92.15
+"B1 calibrated, total params",test,12,49.56,54.64,81.86,82.3
+"B2 calibrated, active params (ours)",train,45,10.3,5.38,28.79,56.18
+"B2 calibrated, active params (ours)",test,12,10.88,8.91,22.93,34.52

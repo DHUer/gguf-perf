@@ -1,0 +1,19 @@
+{
+  "host": "lun-mac",
+  "platform": "Darwin-arm64",
+  "python": "3.13.0 (main, Oct  7 2024, 05:02:14) [Clang 15.0.0 (clang-1500.3.9.4)]",
+  "llama_bench": "/opt/homebrew/bin/llama-bench",
+  "llama_bench_version": "usage: /opt/homebrew/bin/llama-bench [options]",
+  "threads": 12,
+  "git_commit": "nogit",
+  "cpu": "arm",
+  "timestamp": "2026-08-31T22:23:21.046213-07:00",
+  "protocol": {
+    "flash_attn": "on (pinned)",
+    "cache_type_k": "f16",
+    "cache_type_v": "f16",
+    "repetitions": 5,
+    "settle_seconds": 45.0,
+    "warmup": "llama-bench default (enabled)"
+  }
+}

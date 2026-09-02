@@ -1,0 +1,27 @@
+# Model weights: ~313 GB. Fetched by `python -m llmperf.fetch`, never committed.
+models/
+
+# Virtual environment
+.venv/
+__pycache__/
+*.pyc
+
+# Local caches and transient state
+results/gguf_meta_cache.json
+results/campaign.lock.json
+results/*.bak
+results/*.part
+
+# Raw stdout captures from analysis stages; regenerated on every run.
+results/_analyze.out
+results/_refine.out
+
+# OS noise
+.DS_Store
+
+# Parallel Codex working copy (~954 MB, 31k files). A separate checkout of this
+# same project, not part of it.
+.workspaces/
+
+# Local agent state
+.claude/

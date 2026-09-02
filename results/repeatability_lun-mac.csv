@@ -1,0 +1,7 @@
+timestamp,host,platform,git_commit,model,quant,run_index,settle_s,prefill_ts,decode_ts,decode_sd_within,elapsed_s
+2026-08-30T01:06:08.096930-07:00,lun-mac,Darwin-arm64,nogit,SmolLM3-Q4_K_M,Q4_K_M,1,45.0,2137.57181,164.323434,6.520045,6.5
+2026-08-30T01:06:59.837356-07:00,lun-mac,Darwin-arm64,nogit,SmolLM3-Q4_K_M,Q4_K_M,2,45.0,2136.649717,165.44664,1.473453,6.5
+2026-08-30T01:07:51.671530-07:00,lun-mac,Darwin-arm64,nogit,SmolLM3-Q4_K_M,Q4_K_M,3,45.0,2136.741569,163.199924,10.62928,6.8
+2026-08-30T01:08:43.573411-07:00,lun-mac,Darwin-arm64,nogit,SmolLM3-Q4_K_M,Q4_K_M,4,45.0,2116.939241,166.924962,2.338327,6.8
+2026-08-30T01:09:35.318847-07:00,lun-mac,Darwin-arm64,nogit,SmolLM3-Q4_K_M,Q4_K_M,5,45.0,2135.238217,168.415192,0.805188,6.7
+2026-08-30T01:10:26.991582-07:00,lun-mac,Darwin-arm64,nogit,SmolLM3-Q4_K_M,Q4_K_M,6,45.0,2135.402591,170.432368,0.464131,6.6

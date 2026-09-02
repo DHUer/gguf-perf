@@ -1,0 +1,37 @@
+host=lun-mac platform=Darwin-arm64 threads=12
+llama-bench: /opt/homebrew/bin/llama-bench
+14 models x 1 ngl levels = 14 cells
+depths=[0, 4096, 16384] prompt=512 gen=128 reps=5 settle=45.0s
+output: /Users/lun/Projects/O1A/paper/results/measurements_lun-mac.csv  (0 cells already done)
+
+  NVIDIA-Nemotron-3-Nano-4B-Q4_K_M                     Q4_K_M     2.84 GB   3.97B total /  3.97B active
+  Qwen3.5-4B-Q4_K_M                                    Q4_K_M     2.74 GB   4.21B total /  4.21B active
+  Qwen3.5-4B-Q8_0                                      Q8_0       4.48 GB   4.21B total /  4.21B active
+  Qwen3.5-9B-Q4_K_M                                    Q4_K_M     5.68 GB   8.95B total /  8.95B active
+  Qwen3.5-9B-Q8_0                                      Q8_0       9.53 GB   8.95B total /  8.95B active
+  Qwen3.8-27B-UD-IQ2_XXS                               IQ2_XXS    7.27 GB  26.90B total / 26.90B active
+  Qwen3.8-27B-UD-IQ3_XXS                               IQ3_XXS   10.93 GB  27.32B total / 27.32B active
+  Qwen3.8-27B-UD-Q2_K_XL                               Q2_K       9.83 GB  27.32B total / 27.32B active
+  Qwen3.8-27B-UD-Q4_K_XL                               Q4_K      17.56 GB  27.32B total / 27.32B active
+  SmolLM3-Q4_K_M                                       Q4_K_M     1.92 GB   3.08B total /  3.08B active
+  SmolLM3-Q8_0                                         Q8_0       3.28 GB   3.08B total /  3.08B active
+  gemma-4-12b-it-qat-q4_0                              Q4_0       6.98 GB  11.91B total / 11.91B active
+  gpt-oss-20b-MXFP4                                    MXFP4     12.11 GB  20.91B total /  4.19B active  [MoE]
+  inclusionAI_Ling-mini-2.0-Q4_K_M                     Q4_K_M     9.94 GB  16.26B total /  1.43B active  [MoE]
+[1/14] NVIDIA-Nemotron-3-Nano-4B-Q4_K_M ngl=99 ... ok (52s) pp=1292 tg@0=93.5 tg@4096=92.3 tg@16384=80.2
+[2/14] Qwen3.5-4B-Q4_K_M ngl=99 ... ok (96s) pp=603 tg@0=45.7 tg@4096=52.4 tg@16384=51.4
+[3/14] Qwen3.5-4B-Q8_0 ngl=99 ... ok (82s) pp=802 tg@0=52.5 tg@4096=51.6 tg@16384=46.4
+[4/14] Qwen3.5-9B-Q4_K_M ngl=99 ... ok (127s) pp=422 tg@0=38.1 tg@4096=38.7 tg@16384=37.8
+[5/14] Qwen3.5-9B-Q8_0 ngl=99 ... ok (110s) pp=571 tg@0=39.7 tg@4096=40.6 tg@16384=36.5
+[6/14] Qwen3.8-27B-UD-IQ2_XXS ngl=99 ... ok (320s) pp=161 tg@0=17.9 tg@4096=16.5 tg@16384=16.5
+[7/14] Qwen3.8-27B-UD-IQ3_XXS ngl=99 ... ok (239s) pp=231 tg@0=23.3 tg@4096=22.7 tg@16384=20.7
+[8/14] Qwen3.8-27B-UD-Q2_K_XL ngl=99 ... ok (234s) pp=231 tg@0=24.1 tg@4096=23.1 tg@16384=21.9
+[9/14] Qwen3.8-27B-UD-Q4_K_XL ngl=99 ... ok (276s) pp=225 tg@0=20.0 tg@4096=19.5 tg@16384=16.1
+[10/14] SmolLM3-Q4_K_M ngl=99 ... ok (39s) pp=2111 tg@0=164.8 tg@4096=147.6 tg@16384=108.6
+[11/14] SmolLM3-Q8_0 ngl=99 ... ok (43s) pp=2224 tg@0=116.8 tg@4096=107.1 tg@16384=85.1
+[12/14] gemma-4-12b-it-qat-q4_0 ngl=99 ... ok (110s) pp=583 tg@0=53.1 tg@4096=48.8 tg@16384=45.1
+[13/14] gpt-oss-20b-MXFP4 ngl=99 ... ok (49s) pp=1586 tg@0=119.0 tg@4096=116.1 tg@16384=99.6
+[14/14] inclusionAI_Ling-mini-2.0-Q4_K_M ngl=99 ... ok (25s) pp=4214 tg@0=236.3 tg@4096=215.6 tg@16384=175.2
+
+14 cells measured, 0 skipped (already done), 0 failed
+-> /Users/lun/Projects/O1A/paper/results/measurements_lun-mac.csv

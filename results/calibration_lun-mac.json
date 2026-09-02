@@ -1,0 +1,81 @@
+{
+  "host": "lun-mac",
+  "platform": "Darwin-arm64",
+  "timestamp": "2026-08-31T14:06:08.193439-07:00",
+  "git_commit": "nogit",
+  "cpu": "arm",
+  "cpu_count": 16,
+  "python": "3.13.0",
+  "cpu_triad": {
+    "gb_s": 48.55758885527099,
+    "array_mib": 512,
+    "reps": 7,
+    "median_s": 0.03405274997930974
+  },
+  "cpu_matmul": {
+    "gflops": 2458.2415628693184,
+    "n": 4096,
+    "reps": 5,
+    "dtype": "float32"
+  },
+  "torch_gpu": {
+    "available": true,
+    "backend": "mps",
+    "name": "arm (Metal)",
+    "vram_gb": 68.719476736,
+    "copy_gb_s": 380.05196389502714,
+    "fp16_tflops": 13.950109887087432,
+    "capability": "mps",
+    "torch": "2.13.0",
+    "cuda": null
+  },
+  "llm_ref": {
+    "available": true,
+    "eff_bw_gb_s": 377.2443921898858,
+    "anchor_model": "Qwen3.5-9B-Q8_0.gguf",
+    "anchor_quant": "Q8_0",
+    "model": "Qwen3.5-9B-Q8_0.gguf",
+    "probe_models": [
+      "Qwen3.8-27B-Q8_0.gguf",
+      "Qwen3.5-9B-Q8_0.gguf",
+      "Qwen3.5-4B-Q8_0.gguf"
+    ],
+    "probes": [
+      {
+        "model": "Qwen3.8-27B-Q8_0.gguf",
+        "file_gb": 29.047086048,
+        "quant": "Q8_0",
+        "decode_tok_s": 7.100355,
+        "stddev_tok_s": 4.19904,
+        "bytes_per_token": 27696225248,
+        "eff_bw_gb_s": 196.65303142076306
+      },
+      {
+        "model": "Qwen3.5-9B-Q8_0.gguf",
+        "file_gb": 9.527502048,
+        "quant": "Q8_0",
+        "decode_tok_s": 44.661149,
+        "stddev_tok_s": 0.585764,
+        "bytes_per_token": 8446813408,
+        "eff_bw_gb_s": 377.2443921898858
+      },
+      {
+        "model": "Qwen3.5-4B-Q8_0.gguf",
+        "file_gb": 4.482403488,
+        "quant": "Q8_0",
+        "decode_tok_s": 70.817391,
+        "stddev_tok_s": 5.524095,
+        "bytes_per_token": 4482403488,
+        "eff_bw_gb_s": 317.4321204294598
+      }
+    ],
+    "decode_tok_s": 44.661149,
+    "stddev_tok_s": 0.585764,
+    "bytes_per_token": 8446813408,
+    "file_gb": 9.527502048
+  },
+  "caveats": {
+    "cpu_triad_valid_for_gpu": false,
+    "note": "On Apple Silicon the CPU triad under-reports the bandwidth the GPU can reach through unified memory; use llm_ref as the bandwidth term on this machine."
+  }
+}

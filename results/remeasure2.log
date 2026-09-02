@@ -1,0 +1,8 @@
+host=lun-mac platform=Darwin-arm64 threads=12
+llama-bench: /opt/homebrew/bin/llama-bench
+1 models x 1 ngl levels = 1 cells
+depths=[0, 4096, 16384] prompt=512 gen=128 reps=5 settle=45.0s
+output: /Users/lun/Projects/O1A/paper/results/measurements_lun-mac.csv  (132 cells already done)
+
+  Muse-Glimmer-30B-UD-Q4_K_XL                          Q4_K      15.88 GB  27.85B total / 27.85B active
+[1/1] Muse-Glimmer-30B-UD-Q4_K_XL ngl=99 ... 
