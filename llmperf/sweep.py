@@ -149,6 +149,15 @@ def load_average() -> float:
     comparable to one taken in a quiet window. Storing it makes contaminated
     cells filterable after the fact instead of silently poisoning the dataset.
     """
+    # os.getloadavg() does not exist on Windows. psutil emulates it there, and
+    # without this the gate degrades to a no-op on exactly the platform the
+    # discrete-GPU measurements come from -- silently, because NaN compares
+    # false against any threshold.
+    try:
+        import psutil
+        return float(psutil.getloadavg()[0])
+    except Exception:
+        pass
     try:
         return float(os.getloadavg()[0])
     except (OSError, AttributeError):

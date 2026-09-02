@@ -3,6 +3,9 @@ pandas>=2.0
 matplotlib>=3.8
 scipy>=1.11
 gguf>=0.10
+# Cross-platform load average. os.getloadavg() is Unix-only; without psutil
+# the sweep's load gate silently no-ops on Windows.
+psutil>=5.9
 huggingface_hub>=0.24
 # Optional. Only needed on the discrete-GPU machine, to measure real device
 # bandwidth and FLOPS. Everything else runs without it.
