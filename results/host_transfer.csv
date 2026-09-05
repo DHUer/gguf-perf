@@ -1,0 +1,7 @@
+variant,held_out_host,n_train,n_held,MAPE_%,median_APE_%,max_APE_%
+B2 median-ratio (all target),lun-mac,36,57,20.8201,15.4096,75.814
+B2 median-ratio (all target),rtx5080,45,42,21.6916,18.7468,71.5281
+B2 median-ratio (target test),lun-mac,36,12,13.9367,8.6303,47.6725
+B2 median-ratio (target test),rtx5080,45,6,36.6978,26.1832,71.5281
+two-term absolute-time,lun-mac,36,57,57.0593,54.224,78.5693
+two-term absolute-time,rtx5080,45,42,116.8478,98.6576,349.2502

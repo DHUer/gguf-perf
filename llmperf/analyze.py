@@ -23,10 +23,10 @@ fitted on TRAIN models only and applied unchanged to TEST models, so the headlin
 error is genuine out-of-sample generalisation.
 
 BASELINES (a reviewer will demand these)
-    B0  uncalibrated roofline, eta = 1, total params
-    B1  calibrated, but total params -- isolates how much the MoE sparsity term
+    B0  unfitted roofline, eta = 1, total params
+    B1  fitted, but total params -- isolates how much the MoE sparsity term
         is actually worth
-    B2  this paper: calibrated + active params + KV term
+    B2  this paper: fitted + active params + KV term
 
     python -m llmperf.analyze
 """
@@ -43,7 +43,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .common import FIGURES_DIR, MODELS_DIR, RESULTS_DIR, KV_BYTES_PER_ELEM
+from .common import (FIGURES_DIR, MODELS_DIR, RESULTS_DIR, load_model_metadata,
+                     load_model_splits)
+
+
+# The predictor's declared baseline is llama.cpp's "offload as many layers as
+# possible" setting. Lower values are a separate intervention used to draw the
+# offload cliff; mixing those rows into eta fitting would make the headline
+# error depend on how many offload points happened to be collected.
+PRIMARY_N_GPU_LAYERS = 99
+PREFILL_FIT_DEPTH = 0
 
 plt.rcParams.update({
     "figure.dpi": 140, "savefig.dpi": 200, "font.size": 9,
@@ -69,33 +78,50 @@ def load_measurements(results_dir: Path) -> pd.DataFrame:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df = df.dropna(subset=["avg_ts"])
 
-    # A cell may be measured more than once. Keep the BEST attempt, not the
-    # most recent: the sweep proceeds after its load-wait times out, so a later
-    # row can have been taken on a busier machine than an earlier one, and
-    # most-recent-wins would let a load-264 measurement overwrite a load-16 one.
+    # A cell may be measured more than once. Prefer rows produced by the full
+    # quality-gated protocol, then keep the best attempt inside that protocol.
+    # Legacy rows predate load/CV bookkeeping and are not interchangeable with
+    # the declared experiment merely because their within-run CV is smaller.
     #
-    # Ranking is on measurement quality only -- llama-bench's own within-run CV,
-    # then load average, then recency. None of these looks at the residual, so
-    # this is a quality rule rather than selection on the outcome.
+    # Ranking is on protocol eligibility and measurement quality only -- never
+    # on a prediction residual. `drop_duplicates` is intentional: pandas
+    # GroupBy.first() chooses the first *non-null value in each column*, which
+    # can splice timestamp/throughput from a legacy row together with load and
+    # retry metadata from a later row that was never actually selected.
     if "timestamp" in df.columns:
         before = len(df)
         df = df.copy()
-        df["_cv"] = pd.to_numeric(df.get("kept_cv_pct"), errors="coerce")
+        protocol_fields = [
+            "load_before", "load_after", "attempts", "kept_cv_pct",
+            "max_cv_pct",
+        ]
+        if all(c in df.columns for c in protocol_fields):
+            df["quality_protocol"] = df[protocol_fields].notna().all(axis=1)
+        else:
+            df["quality_protocol"] = False
+        kept_cv = (df["kept_cv_pct"] if "kept_cv_pct" in df.columns
+                   else pd.Series(np.nan, index=df.index))
+        df["_cv"] = pd.to_numeric(kept_cv, errors="coerce")
         # Fall back to the per-row stddev where the retry bookkeeping predates
         # the column, so old rows are ranked on the same basis.
         fallback = (pd.to_numeric(df["stddev_ts"], errors="coerce")
                     / pd.to_numeric(df["avg_ts"], errors="coerce") * 100)
         df["_cv"] = df["_cv"].fillna(fallback).fillna(np.inf)
-        df["_load"] = pd.to_numeric(df.get("load_before"), errors="coerce").fillna(np.inf)
-        df = (df.sort_values(["_cv", "_load", "timestamp"],
-                             ascending=[True, True, False])
-                .groupby(["host", "model_file", "n_gpu_layers", "n_depth",
-                          df["n_gen"].gt(0)], dropna=False, as_index=False)
-                .first()
+        load_before = (df["load_before"] if "load_before" in df.columns
+                       else pd.Series(np.nan, index=df.index))
+        df["_load"] = pd.to_numeric(load_before, errors="coerce").fillna(np.inf)
+        keys = ["host", "model_file", "n_gpu_layers", "n_depth",
+                "n_prompt", "n_gen"]
+        df = (df.sort_values(
+                    ["quality_protocol", "_cv", "_load", "timestamp"],
+                    ascending=[False, True, True, False])
+                .drop_duplicates(keys, keep="first")
                 .drop(columns=["_cv", "_load"], errors="ignore"))
         if len(df) < before:
+            n_protocol = int(df["quality_protocol"].sum())
             print(f"deduplicated {before - len(df)} re-measured row(s); "
-                  f"kept the lowest-CV attempt per cell")
+                  f"kept protocol-complete rows first, then lowest CV "
+                  f"({n_protocol}/{len(df)} selected rows protocol-complete)")
     return df
 
 
@@ -107,12 +133,69 @@ def load_calibration(results_dir: Path) -> dict:
     return out
 
 
-def load_splits(models_dir: Path) -> dict:
-    p = models_dir / "manifest.json"
-    if not p.exists():
-        return {}
-    return {k: v.get("split", "") for k, v in
-            json.loads(p.read_text(encoding="utf-8")).items()}
+def load_splits(models_dir: Path, results_dir: Path = RESULTS_DIR) -> dict:
+    """Load live and frozen split provenance; reject any disagreement."""
+    return load_model_splits(models_dir, results_dir)
+
+
+def resolve_splits(df: pd.DataFrame, splits: dict[str, str]) -> pd.DataFrame:
+    """Resolve each row's fixed split without silently training on unknowns.
+
+    New measurement rows carry their split directly. Legacy rows have a blank
+    column and are recovered from the tracked result-side manifest. Either is
+    sufficient, but if both exist they must agree.
+    """
+    out = df.copy()
+    if "split" in out.columns:
+        recorded = out["split"].fillna("").astype(str).str.strip().str.lower()
+    else:
+        recorded = pd.Series("", index=out.index, dtype="object")
+    mapped = out["model_file"].map(splits)
+    valid_recorded = recorded.isin({"train", "test"})
+    invalid_recorded = recorded.ne("") & ~valid_recorded
+    if invalid_recorded.any():
+        details = sorted({
+            f"{mf}: {split!r}" for mf, split in
+            zip(out.loc[invalid_recorded, "model_file"], recorded[invalid_recorded])
+        })
+        raise ValueError("invalid train/test split in measurement CSV: " +
+                         "; ".join(details))
+
+    conflict = valid_recorded & mapped.notna() & recorded.ne(mapped)
+    if conflict.any():
+        details = sorted({
+            f"{mf}: csv={csv_split}, manifest={manifest_split}"
+            for mf, csv_split, manifest_split in zip(
+                out.loc[conflict, "model_file"], recorded[conflict], mapped[conflict])
+        })
+        raise ValueError("conflicting train/test split provenance: " +
+                         "; ".join(details))
+
+    resolved = recorded.where(valid_recorded, mapped)
+    missing = sorted(out.loc[resolved.isna() | ~resolved.isin({"train", "test"}),
+                             "model_file"].astype(str).unique())
+    if missing:
+        raise ValueError(
+            "missing fixed train/test split provenance for: " + ", ".join(missing) +
+            ". Restore results/model_manifest.json or provide split values in "
+            "the measurement CSV; unknown models are never assumed to be train.")
+    out["split"] = resolved
+    return out
+
+
+def select_primary_measurements(df: pd.DataFrame) -> pd.DataFrame:
+    """Rows eligible for predictor fitting and headline error metrics."""
+    if "n_gpu_layers" not in df.columns:
+        raise ValueError("measurements have no n_gpu_layers column")
+    ngl = pd.to_numeric(df["n_gpu_layers"], errors="coerce")
+    eligible = ngl == PRIMARY_N_GPU_LAYERS
+    # Once a dataset contains rows from the declared load/CV-gated protocol,
+    # legacy rows are excluded from headline fits rather than mixed into the
+    # cohort. A fully legacy dataset remains analysable, but must not be
+    # described as quality-gated.
+    if "quality_protocol" in df.columns and df["quality_protocol"].any():
+        eligible &= df["quality_protocol"].fillna(False).astype(bool)
+    return df[eligible].copy()
 
 
 def bandwidth_for(cal: dict) -> tuple[float, str]:
@@ -163,8 +246,10 @@ def calibration_probe_models(cal: dict) -> dict:
     return out
 
 
-def refresh_metadata(df: pd.DataFrame, models_dir: Path = MODELS_DIR) -> pd.DataFrame:
-    """Re-derive model metadata from the GGUF files where they are present.
+def refresh_metadata(df: pd.DataFrame, models_dir: Path = MODELS_DIR,
+                     metadata: dict[str, dict] | None = None,
+                     prefer_live: bool = True) -> pd.DataFrame:
+    """Refresh metadata from GGUFs, falling back to the audited snapshot.
 
     sweep.py denormalises architecture fields into every measurement row, which
     freezes whatever the parser believed at measurement time. When the parser is
@@ -172,44 +257,107 @@ def refresh_metadata(df: pd.DataFrame, models_dir: Path = MODELS_DIR) -> pd.Data
     one expert tensor — the fix would otherwise never reach data already on disk,
     and re-measuring 300 GB of models to pick up a metadata change is absurd.
 
-    Rows whose GGUF is not on this machine keep their recorded values, so another
-    host's CSV still analyses correctly.
+    Live GGUF headers take precedence by default. The tracked snapshot makes
+    the same corrected metadata available on a clean clone; retaining whatever
+    happened to be denormalised into an old CSV would resurrect fixed parser
+    bugs. Set ``prefer_live=False`` for frozen-artifact generation whose inputs
+    must not depend on which model files happen to be installed locally.
     """
     from .common import read_gguf_meta
 
     cols = ["file_bytes", "n_params", "n_active_params", "n_layers",
-            "n_kv_heads", "head_dim", "n_expert", "n_expert_used", "quant"]
-    fresh, changed = {}, []
+            "n_kv_heads", "head_dim", "n_expert", "n_expert_used", "quant",
+            "arch"]
+    metadata = metadata or {}
+    fresh, changed, missing = {}, [], []
+    from_snapshot = live = 0
     for name in df["model_file"].dropna().unique():
-        path = models_dir / str(name)
-        if not path.is_file():
+        name = str(name)
+        snapshot = metadata.get(name)
+        vals = ({c: snapshot[c] for c in cols} if snapshot is not None else None)
+        source = "snapshot" if vals is not None else ""
+
+        path = models_dir / name
+        if prefer_live and path.is_file():
+            try:
+                m = read_gguf_meta(path)
+            except Exception as e:
+                if vals is None:
+                    raise ValueError(
+                        f"cannot read GGUF metadata for {name}, and no audited "
+                        f"snapshot is available: {e}") from e
+                print(f"WARNING: cannot read {path}; using audited metadata "
+                      f"snapshot ({type(e).__name__}: {e})", file=sys.stderr)
+            else:
+                live_vals = {c: getattr(m, c) for c in cols}
+                if vals is not None:
+                    disagreements = [c for c in cols if vals[c] != live_vals[c]]
+                    if disagreements:
+                        print(f"WARNING: live GGUF metadata for {name} differs "
+                              f"from the frozen snapshot in "
+                              f"{', '.join(disagreements)}; using live GGUF",
+                              file=sys.stderr)
+                vals, source = live_vals, "live"
+
+        if vals is None:
+            missing.append(name)
             continue
-        try:
-            m = read_gguf_meta(path)
-        except Exception:
-            continue
-        fresh[name] = {c: getattr(m, c) for c in cols}
+        if source == "snapshot" and "file_bytes" in df.columns:
+            recorded_sizes = pd.to_numeric(
+                df.loc[df["model_file"] == name, "file_bytes"], errors="coerce"
+            ).dropna().unique()
+            if any(int(size) != int(vals["file_bytes"]) for size in recorded_sizes):
+                raise ValueError(
+                    f"audited metadata for {name} describes a different file "
+                    f"size ({vals['file_bytes']}) than the measurement CSV "
+                    f"({', '.join(str(int(x)) for x in recorded_sizes)}). Make "
+                    f"the measured GGUF available or update the snapshot from "
+                    f"that exact file.")
+        fresh[name] = vals
+        if source == "live":
+            live += 1
+        else:
+            from_snapshot += 1
+
+    if missing:
+        raise ValueError(
+            "no trustworthy model metadata for: " + ", ".join(sorted(missing)) +
+            ". Restore results/model_metadata.json or make the GGUF files "
+            "available; stale CSV metadata is not used as a silent fallback.")
 
     df = df.copy()
     for name, vals in fresh.items():
         rows = df["model_file"] == name
         for c, v in vals.items():
             old = df.loc[rows, c]
-            if c != "quant" and len(old) and pd.notna(old.iloc[0]) \
-                    and float(old.iloc[0]) != float(v):
-                changed.append(f"{name}.{c}: {old.iloc[0]:g} -> {v:g}")
+            if len(old) and pd.notna(old.iloc[0]):
+                if c in {"quant", "arch"}:
+                    differs = str(old.iloc[0]) != str(v)
+                    detail = f"{old.iloc[0]} -> {v}"
+                else:
+                    differs = float(old.iloc[0]) != float(v)
+                    detail = f"{old.iloc[0]:g} -> {v:g}"
+                if differs:
+                    changed.append(f"{name}.{c}: {detail}")
             df.loc[rows, c] = v
     if changed:
-        print(f"refreshed metadata from GGUF for {len(fresh)} models; "
+        print(f"refreshed metadata for {len(fresh)} models "
+              f"({live} live GGUF, {from_snapshot} frozen); "
               f"{len(changed)} field(s) corrected:")
         for c in changed[:10]:
             print(f"    {c}")
+    elif from_snapshot:
+        print(f"metadata: {live} live GGUF, {from_snapshot} audited snapshot")
     return df
 
 
-def add_features(df: pd.DataFrame, cal: dict, splits: dict) -> pd.DataFrame:
-    df = refresh_metadata(df)
-    df["split"] = df["model_file"].map(splits).fillna("train")
+def add_features(df: pd.DataFrame, cal: dict, splits: dict,
+                 metadata: dict[str, dict] | None = None,
+                 models_dir: Path = MODELS_DIR,
+                 prefer_live: bool = True) -> pd.DataFrame:
+    metadata = metadata or {}
+    df = refresh_metadata(df, models_dir, metadata, prefer_live=prefer_live)
+    df = resolve_splits(df, splits)
 
     probes = calibration_probe_models(cal)
     df["is_calibration_probe"] = [
@@ -220,26 +368,34 @@ def add_features(df: pd.DataFrame, cal: dict, splits: dict) -> pd.DataFrame:
                                  df["n_active_params"] / df["n_params"], 1.0)
     df["is_moe"] = df["n_expert"].fillna(0) > 0
 
-    # Delegate to ModelMeta.kv_bytes rather than recomputing inline. The inline
-    # version silently kept the uniform-global-attention assumption after the
-    # per-layer model was written, so sliding-window and recurrent layers were
-    # still being charged a full growing cache here even though common.py knew
-    # better. One formula, one place.
+    # Prefer the live ModelMeta calculation. Without a local GGUF, use the exact
+    # per-depth values frozen when the committed results were generated. Never
+    # reconstruct KV traffic from scalar columns: that silently revives the
+    # uniform-global-attention bug for sliding-window and recurrent models.
     from .common import read_gguf_meta
     kv = []
+    unreadable: set[str] = set()
     for name, depth in zip(df["model_file"], df["n_depth"].fillna(0)):
-        p = MODELS_DIR / str(name)
-        if p.is_file():
+        name, depth = str(name), int(depth)
+        p = models_dir / name
+        if prefer_live and p.is_file():
             try:
-                kv.append(read_gguf_meta(p).kv_bytes(int(depth)))
+                kv.append(read_gguf_meta(p).kv_bytes(depth))
                 continue
-            except Exception:
-                pass
-        # Model not on this machine: fall back to the uniform estimate from the
-        # recorded columns, which is all another host's CSV carries.
-        row = df[df["model_file"] == name].iloc[0]
-        kv.append(2 * row["n_layers"] * row["n_kv_heads"] * row["head_dim"]
-                  * depth * KV_BYTES_PER_ELEM)
+            except Exception as e:
+                if name not in unreadable:
+                    print(f"WARNING: cannot compute KV bytes from {p}; using "
+                          f"audited snapshot ({type(e).__name__}: {e})",
+                          file=sys.stderr)
+                    unreadable.add(name)
+        entry = metadata.get(name) or {}
+        by_depth = entry.get("kv_bytes_by_depth") or {}
+        if str(depth) not in by_depth:
+            raise ValueError(
+                f"no audited KV metadata for {name} at depth {depth}. Make the "
+                f"GGUF available or extend results/model_metadata.json; a "
+                f"uniform-attention estimate would be unsafe.")
+        kv.append(int(by_depth[str(depth)]))
     df["kv_bytes"] = kv
     df["bytes_active"] = df["file_bytes"] * df["active_frac"] + df["kv_bytes"]
     df["bytes_total"] = df["file_bytes"] + df["kv_bytes"]
@@ -287,7 +443,7 @@ def ape(pred: np.ndarray, actual: np.ndarray) -> np.ndarray:
 
 
 def evaluate_prefill(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fit and score the compute-bound regime.
+    """Fit the compute-bound regime at an empty cache and score every depth.
 
     The paper states a two-regime model; testing only decode leaves half of it
     unevaluated. Prefill processes the whole prompt in parallel, so it is
@@ -302,9 +458,14 @@ def evaluate_prefill(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     prefill rate goes as 1 / active parameters — is still testable, and that is
     what the error columns below measure.
 
-    Two variants are fitted so the compute-bound assumption is itself checked:
-    one eta_p per host (what the model predicts, if prefill is quantisation
-    independent) and one per host x quantisation (what is needed if it is not).
+    The equation has no context-depth term, so its primary fit and headline
+    score are restricted to n_depth=0. Predictions are still emitted for every
+    measured depth; their degradation is a scope diagnostic rather than being
+    pooled into a deceptively benign headline average.
+
+    Two variants are fitted: one eta_p per host (quantisation independent) and
+    one per host x quantisation. Returned rows carry both predictions and APEs
+    so every prefill observation is available to the paper supplement.
     """
     pf = df[(df["phase"] == "prefill") & df["flops"].notna()
             & (df["n_active_params"] > 0)].copy()
@@ -312,9 +473,11 @@ def evaluate_prefill(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         return pf, pd.DataFrame()
 
     pf["flops_per_token"] = 2.0 * pf["n_active_params"]
-    train = pf[pf["split"] == "train"]
+    train = pf[(pf["split"] == "train") &
+               (pf["n_depth"] == PREFILL_FIT_DEPTH)]
     if train.empty:
-        train = pf
+        raise ValueError(
+            f"no training prefill rows at n_depth={PREFILL_FIT_DEPTH}")
 
     ratio = train["avg_ts"] * train["flops_per_token"] / train["flops"]
     by_host = ratio.groupby(train["host"]).median()
@@ -333,18 +496,48 @@ def evaluate_prefill(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         return e * d["flops"].to_numpy() / d["flops_per_token"].to_numpy()
 
     rows = []
-    for name, fn in (("P1 eta_p per host", pred_host),
-                     ("P2 eta_p per host x quant", pred_hq)):
+    for short, name, fn in (
+            ("P1", "P1 eta_p per host", pred_host),
+            ("P2", "P2 eta_p per host x quant", pred_hq)):
         p = fn(pf)
+        pf[f"pred_{short}"] = p
+        pf[f"ape_{short}"] = ape(p, pf["avg_ts"].to_numpy())
+        scored = pf[pf["n_depth"] == PREFILL_FIT_DEPTH]
         for split in ("train", "test"):
-            m = (pf["split"] == split).to_numpy()
+            m = (scored["split"] == split).to_numpy()
             if not m.any():
                 continue
-            e = ape(p[m], pf["avg_ts"].to_numpy()[m])
+            e = scored.loc[scored["split"] == split, f"ape_{short}"].to_numpy()
             rows.append({"model": name, "split": split, "n": int(m.sum()),
+                         "n_depth": PREFILL_FIT_DEPTH,
                          "MAPE_%": e.mean(), "median_APE_%": np.median(e),
                          "p90_APE_%": np.percentile(e, 90), "max_APE_%": e.max()})
     return pf, pd.DataFrame(rows)
+
+
+def prefill_error_table_by_host(pf: pd.DataFrame) -> pd.DataFrame:
+    """Summarize depth-zero prefill error separately for every host."""
+    scored = pf[pf["n_depth"] == PREFILL_FIT_DEPTH]
+    rows = []
+    for host in sorted(scored["host"].dropna().unique()):
+        host_rows = scored[scored["host"] == host]
+        for short, name in (("P1", "P1 eta_p per host"),
+                            ("P2", "P2 eta_p per host x quant")):
+            for split in ("train", "test"):
+                values = host_rows.loc[
+                    host_rows["split"] == split, f"ape_{short}"
+                ].to_numpy()
+                if not len(values):
+                    continue
+                rows.append({
+                    "host": host, "model": name, "split": split,
+                    "n": len(values), "n_depth": PREFILL_FIT_DEPTH,
+                    "MAPE_%": values.mean(),
+                    "median_APE_%": np.median(values),
+                    "p90_APE_%": np.percentile(values, 90),
+                    "max_APE_%": values.max(),
+                })
+    return pd.DataFrame(rows)
 
 
 def error_table(df: pd.DataFrame, preds: dict) -> pd.DataFrame:
@@ -359,6 +552,26 @@ def error_table(df: pd.DataFrame, preds: dict) -> pd.DataFrame:
                          "MAPE_%": e.mean(), "median_APE_%": np.median(e),
                          "p90_APE_%": np.percentile(e, 90), "max_APE_%": e.max()})
     return pd.DataFrame(rows)
+
+
+def error_table_by_host(df: pd.DataFrame, preds: dict) -> pd.DataFrame:
+    """Return the same error summary without pooling unlike hardware.
+
+    A pooled table is useful as an inventory summary, but it is not a valid
+    substitute for reporting each host when cohort sizes differ.  Keep this
+    export beside the pooled table so downstream papers cannot accidentally
+    hide a weak host behind the larger one.
+    """
+    rows = []
+    for host in sorted(df["host"].dropna().unique()):
+        mask = (df["host"] == host).to_numpy()
+        host_df = df.loc[mask].reset_index(drop=True)
+        host_preds = {name: np.asarray(values)[mask]
+                      for name, values in preds.items()}
+        table = error_table(host_df, host_preds)
+        table.insert(0, "host", host)
+        rows.append(table)
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
 # --------------------------------------------------------------------------
@@ -457,7 +670,9 @@ def fig_moe(df, preds, out: Path):
 
 
 def fig_offload(df, out: Path):
-    d = df[df["n_gpu_layers"].notna()]
+    # One point per offload level. The depth sweep is a separate experiment;
+    # connecting all depths would draw a meaningless zig-zag at every level.
+    d = df[df["n_gpu_layers"].notna() & (df["n_depth"] == 0)]
     if d["n_gpu_layers"].nunique() < 3:
         return False
     fig, ax = plt.subplots(figsize=(5.2, 3.8))
@@ -484,15 +699,21 @@ def main(argv=None) -> int:
     ap.add_argument("--results", type=Path, default=RESULTS_DIR)
     ap.add_argument("--models-dir", type=Path, default=MODELS_DIR)
     ap.add_argument("--figures", type=Path, default=FIGURES_DIR)
+    ap.add_argument("--selfcheck", action="store_true")
     args = ap.parse_args(argv)
+
+    if args.selfcheck:
+        _selfcheck()
+        return 0
 
     df = load_measurements(args.results)
     cal = load_calibration(args.results)
     if not cal:
         raise SystemExit(f"No calibration_*.json in {args.results}. "
                          f"Run `python -m llmperf.calibrate` first.")
-    splits = load_splits(args.models_dir)
-    df = add_features(df, cal, splits)
+    splits = load_splits(args.models_dir, args.results)
+    metadata = load_model_metadata(args.results)
+    df = add_features(df, cal, splits, metadata, args.models_dir)
     args.figures.mkdir(parents=True, exist_ok=True)
 
     for host, c in cal.items():
@@ -501,17 +722,25 @@ def main(argv=None) -> int:
         print(f"calibration[{host}]: BW={bw/1e9:.1f} GB/s ({bw_src}), "
               f"compute={fl/1e12:.2f} TFLOP/s ({fl_src})")
 
-    dec = df[(df["phase"] == "decode") & df["bw"].notna()].reset_index(drop=True)
+    all_dec = df[(df["phase"] == "decode") & df["bw"].notna()].reset_index(drop=True)
+    dec = select_primary_measurements(all_dec).reset_index(drop=True)
+    n_offload = len(all_dec) - len(dec)
+    if n_offload:
+        print(f"\nexcluding {n_offload} partial-offload decode row(s) from "
+              f"predictor fitting/scoring; retained for the offload-cliff figure")
     if dec.empty:
-        raise SystemExit("No decode rows with calibration. Nothing to fit.")
+        raise SystemExit(
+            f"No decode rows with calibration at n_gpu_layers="
+            f"{PRIMARY_N_GPU_LAYERS}. Nothing to fit.")
 
     # The model used as the llm_ref calibration probe has eta == 1 by
     # construction. Scoring it would inflate accuracy, so drop it.
     n_probe = int(dec["is_calibration_probe"].sum())
     if n_probe:
         probes = sorted(dec.loc[dec["is_calibration_probe"], "model_file"].unique())
-        print(f"\nexcluding {n_probe} rows from the calibration probe "
-              f"({', '.join(probes)}): eta is 1.0 there by construction")
+        print(f"\nexcluding {n_probe} rows from the historical calibration-probe "
+              f"cohort ({', '.join(probes)}); this exclusion is preserved "
+              "independently of the selected bandwidth source")
         dec = dec[~dec["is_calibration_probe"]].reset_index(drop=True)
     if dec.empty:
         raise SystemExit(
@@ -528,9 +757,9 @@ def main(argv=None) -> int:
     eta_total = fit_eta(train, "bytes_total")
 
     preds = {
-        "B0 uncalibrated (eta=1, total)": dec["bw"].to_numpy() / dec["bytes_total"].to_numpy(),
-        "B1 calibrated, total params": apply_eta(dec, eta_total, "bytes_total"),
-        "B2 calibrated, active params (ours)": apply_eta(dec, eta_active, "bytes_active"),
+        "B0 unfitted (eta=1, total)": dec["bw"].to_numpy() / dec["bytes_total"].to_numpy(),
+        "B1 fitted, total params": apply_eta(dec, eta_total, "bytes_total"),
+        "B2 fitted, active params (ours)": apply_eta(dec, eta_active, "bytes_active"),
     }
 
     print("\n=== fitted eta (median per host x quant, TRAIN only) ===")
@@ -539,39 +768,103 @@ def main(argv=None) -> int:
     tbl = error_table(dec, preds)
     print("\n=== prediction error ===")
     print(tbl.round(1).to_string(index=False))
+    host_tbl = error_table_by_host(dec, preds)
+    if dec["host"].nunique() > 1:
+        print("\n=== prediction error by host (do not replace with pooled values) ===")
+        print(host_tbl.round(1).to_string(index=False))
 
-    pf, pf_err = evaluate_prefill(df[~df["is_calibration_probe"]])
+    primary = select_primary_measurements(df)
+    pf, pf_err = evaluate_prefill(primary[~primary["is_calibration_probe"]])
     if not pf_err.empty:
-        print("\n=== prefill (compute-bound regime) ===")
+        print(f"\n=== prefill at empty cache (n_depth={PREFILL_FIT_DEPTH}) ===")
         print(pf_err.round(1).to_string(index=False))
+        print("\n=== prefill scope diagnostic by existing-prefix depth ===")
+        depth_err = (pf.groupby(["split", "n_depth"])[["ape_P1", "ape_P2"]]
+                     .agg(["count", "mean", "median", "max"]))
+        print(depth_err.round(1).to_string())
         spread = (pf.groupby("model_name")["avg_ts"].median()
                   / pf["avg_ts"].median()).agg(["min", "max"])
         print(f"{len(pf)} prefill measurements, "
               f"{pf['model_name'].nunique()} models; rate spans "
               f"{spread['min']:.2f}-{spread['max']:.2f}x the median")
-        pf_err.round(2).to_csv(RESULTS_DIR / "error_table_prefill.csv", index=False)
+        pf_err.round(2).to_csv(args.results / "error_table_prefill.csv", index=False)
+        pf_host_err = prefill_error_table_by_host(pf)
+        pf_host_err.round(2).to_csv(
+            args.results / "error_table_prefill_by_host.csv", index=False)
+        pf.to_csv(args.results / "predictions_prefill.csv", index=False)
 
     n_models = dec["model_name"].nunique()
     n_moe = dec[dec["is_moe"]]["model_name"].nunique()
     print(f"\n{len(dec)} decode measurements, {n_models} models "
           f"({n_moe} MoE), {dec['host'].nunique()} host(s)")
 
-    ours = preds["B2 calibrated, active params (ours)"]
+    ours = preds["B2 fitted, active params (ours)"]
     made = []
     fig_pred_vs_actual(dec, ours, args.figures / "fig1_pred_vs_actual.png"); made.append("fig1_pred_vs_actual.png")
     fig_eta(dec, "bytes_active", args.figures / "fig2_eta_by_quant.png"); made.append("fig2_eta_by_quant.png")
     if fig_context(dec, ours, args.figures / "fig3_context_decay.png"): made.append("fig3_context_decay.png")
     if fig_moe(dec, preds, args.figures / "fig4_moe_sparsity.png"): made.append("fig4_moe_sparsity.png")
-    if fig_offload(dec, args.figures / "fig5_offload_cliff.png"): made.append("fig5_offload_cliff.png")
+    if fig_offload(all_dec, args.figures / "fig5_offload_cliff.png"): made.append("fig5_offload_cliff.png")
 
     tbl.round(2).to_csv(args.results / "error_table.csv", index=False)
-    dec.assign(pred_ours=ours,
-               ape_ours=ape(ours, dec["avg_ts"].to_numpy())
-               ).to_csv(args.results / "predictions.csv", index=False)
+    host_tbl.round(2).to_csv(args.results / "error_table_by_host.csv", index=False)
+    exported = dec.copy()
+    for short, name in (("B0", "B0 unfitted (eta=1, total)"),
+                        ("B1", "B1 fitted, total params"),
+                        ("B2", "B2 fitted, active params (ours)")):
+        exported[f"pred_{short}"] = preds[name]
+        exported[f"ape_{short}"] = ape(
+            preds[name], dec["avg_ts"].to_numpy())
+    # Backward-compatible aliases used by existing figures and supplements.
+    exported["pred_ours"] = exported["pred_B2"]
+    exported["ape_ours"] = exported["ape_B2"]
+    exported.to_csv(args.results / "predictions.csv", index=False)
 
     print(f"\nfigures -> {args.figures}: {', '.join(made)}")
-    print(f"tables  -> {args.results}/error_table.csv, predictions.csv")
+    print(f"tables  -> {args.results}/error_table.csv, error_table_by_host.csv, predictions.csv, "
+          f"error_table_prefill.csv, error_table_prefill_by_host.csv, "
+          f"predictions_prefill.csv")
     return 0
+
+
+def _selfcheck() -> None:
+    """Regression guards for split provenance and offload isolation."""
+    frozen = load_splits(MODELS_DIR, RESULTS_DIR)
+    assert frozen.get("SmolLM3-Q4_K_M.gguf") == "train"
+    assert frozen.get("NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf") == "test"
+    metadata = load_model_metadata(RESULTS_DIR)
+    assert metadata["gemma-4-26B-A4B-it-UD-Q4_K_M.gguf"][
+        "n_active_params"] == 3_822_527_246
+    assert metadata["NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf"][
+        "kv_bytes_by_depth"]["0"] == 616_366_080
+
+    legacy = pd.DataFrame({
+        "model_file": ["train.gguf", "test.gguf"],
+        "split": ["", np.nan],
+        "n_gpu_layers": [99, 16],
+    })
+    resolved = resolve_splits(
+        legacy, {"train.gguf": "train", "test.gguf": "test"})
+    assert resolved["split"].tolist() == ["train", "test"]
+    assert select_primary_measurements(resolved)["model_file"].tolist() == ["train.gguf"]
+
+    embedded = pd.DataFrame({"model_file": ["future.gguf"], "split": ["test"]})
+    assert resolve_splits(embedded, {})["split"].tolist() == ["test"]
+
+    try:
+        resolve_splits(pd.DataFrame({"model_file": ["unknown.gguf"]}), {})
+    except ValueError as e:
+        assert "never assumed to be train" in str(e)
+    else:
+        raise AssertionError("unknown split must fail closed")
+
+    try:
+        resolve_splits(embedded, {"future.gguf": "train"})
+    except ValueError as e:
+        assert "conflicting" in str(e)
+    else:
+        raise AssertionError("conflicting split provenance must fail")
+    print("analyze.py selfcheck ok")
 
 
 if __name__ == "__main__":

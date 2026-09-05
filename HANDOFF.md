@@ -1,206 +1,179 @@
-# Handoff
+# Project handoff
 
-Read this first, then `README.md` (how to run) and `paper/paper.md` (findings).
-This file holds what those don't: decisions, retractions, traps, and the job
-that's actually next.
+Last updated 2026-09-04 after completing the two-host analysis and ICASSP 2027
+paper build.
 
-Last updated 2026-09-01, on handoff from the macOS host to the Windows
-ThinkStation.
+## State in one paragraph
 
----
+The M4 Max and RTX 5080 campaigns needed for the paper are complete. The strict
+selector retains 216 measurements, and the scored data contain 99 decode plus
+99 prefill rows across 33 host--file configurations and 21 unique GGUF files.
+Target-fitted B2 reaches 13.11% held-out MAPE on the Mac and 36.15% on RTX.
+B2 median-ratio transfer gives 13.94% and 36.70% on those same test rows, so
+target adaptation is not shown to be necessary within this narrow Q4 test. Its
+all-target MAPE is 20.82%/21.69%, versus target-fitted all-row MAPE of
+10.96%/13.84%; the 57.1%/116.8% values belong only to a rejected two-term
+extension. The main PDF has technical content on pages 1--4
+and references only on page 5, and the supplement is 16 pages. The only
+non-computational submission blocker is the real author name, affiliation, and
+email required by the non-blind ICASSP submission.
 
-## Your job, in one paragraph
+## What is complete
 
-Everything that can be done on one machine is done. The project is blocked on a
-second host. You are on the ThinkStation (RTX 5080, 16 GB VRAM, 128 GB RAM,
-Windows). **Produce `results/measurements_<host>.csv` and
-`results/calibration_<host>.json` for this machine, plus an offload-cliff sweep.**
-That unblocks leave-one-machine-out validation, §5.9 and §5.10 of the paper, and
-turns a single-host study into a cross-architecture one. Nothing else is more
-valuable; resist polishing prose until the data exists.
+- Mac: 132 selected rows from 22 measured files. After three Q8 calibration
+  probes are excluded, 15 training and four held-out configurations contribute
+  57 decode and 57 prefill rows.
+- RTX: 84 selected rows from 14 files, all scored: 12 training and two held-out
+  configurations contribute 42 rows per phase.
+- All selected RTX cells completed with CUDA, five repetitions, a 45-second
+  settle, requested `n_gpu_layers=99`, and depths 0/4096/16384.
+- Analysis, host-separated figures, the ICASSP source, and the complete
+  supplement have been regenerated for both hosts.
+- The local RTX model directory contains the 14-file, 100.7-GB cohort. There is
+  no interrupted `.part` download to resume.
 
-## What this is
+Headline MAPE values are generated in
+`results/error_table_by_host.csv` and
+`results/error_table_prefill_by_host.csv`:
 
-A first paper for an author with **no prior LLM/ML research background**,
-targeting a **conference** (CCF-C realistic, CCF-B a stretch). That constraint
-is load-bearing: no model training, no framework surgery. Everything runs off
-`llama-bench`; not one line of model code is written.
+| Host | Split | B0 | B1 | B2 | P2 depth 0 |
+|---|---|---:|---:|---:|---:|
+| M4 Max | train | 33.57 | 15.80 | **10.39** | **4.13** |
+| M4 Max | test | 46.89 | 49.36 | **13.11** | **18.68** |
+| RTX 5080 | train | 20.27 | **9.85** | 10.12 | **5.86** |
+| RTX 5080 | test | 41.65 | 51.85 | **36.15** | 108.18 |
 
-Public repo: <https://github.com/DHUer/gguf-perf>
+## Claims that survived
 
-**Two papers**, deliberately split:
+1. Activated-parameter accounting materially improves held-out decode error on
+   both hosts relative to charging all stored weights.
+2. Per-layer GGUF metadata prevents large KV-byte overestimates for hybrid and
+   sliding-window architectures.
+3. A B2 median ratio learned on the other host transfers usefully to the fixed
+   held-out Q4 rows: 13.94% Mac and 36.70% RTX MAPE, close to target-fitted
+   13.11% and 36.15%.
+4. Quantization efficiency and even low-bit ordering are backend-specific.
 
-- **`paper/paper.md`** — the predictor. Calibrated two-regime throughput model,
-  inputs are GGUF file size and header metadata only. Blocked on your data.
-- **`paper/measurement_paper.md`** — the measurement-methodology paper. Complete
-  and submittable *now*; needs no new hardware. Likely the better conference bet.
+## Negative results and hard boundaries
 
-## Where it stands
+- **Cross-host transfer is useful but narrowly tested.** Across all target rows,
+  B2 median-ratio transfer gives 20.82% MAPE on 57 Mac rows and 21.69% on 42
+  RTX rows (median 15.41%/18.75%, maximum 75.81%/71.53%), versus target-fitted
+  all-row MAPE of 10.96%/13.84%. On target test rows alone it gives
+  13.94%/36.70% MAPE (median 8.63%/26.18%), nearly matching the target-fitted
+  13.11%/36.15%. All six test configurations are Q4 variants, and RTX has only
+  two, so this does not establish universal transfer.
+- **The prefill baseline is unsupported on RTX under this protocol.** P2
+  held-out depth-zero MAPE is 108.18% on RTX, and it worsens outside the
+  equation's zero-prefix scope.
+- **No residency claim.** `n_gpu_layers=99` is a request, not physical VRAM
+  telemetry. Windows shared-memory spill was not measured.
+- **No offload-cliff claim.** No `n_gpu_layers < 99` sweep was collected.
+- **No universal quantization claim.** Many RTX quantization groups have only
+  one training family, and each host's held-out set contains only Q4 variants.
+- **No accepted output-projection extension.** Its leave-one-host-out errors
+  are 57.1% on Mac and 116.8% on RTX, far worse than B2, and it did not deliver
+  a material, physically credible held-out improvement.
 
-**Data: 22 of 23 models measured on one host** (Apple M4 Max, 64 GB), under a
-declared quality protocol, all in genuine quiet windows. One model
-(gpt-oss-120b, 63 GB) doesn't fit that machine.
+The RTX prefill protocol is an explicit limitation: 29 of 42 selected prefill
+rows exceed 3% within-cell CV, whereas the selected RTX decode maximum is
+1.652%. Do not filter those prefill rows after looking at their errors.
 
-**Current headline numbers** (regenerate with `python -m llmperf.analyze`;
-do not trust numbers typed in prose without checking):
+`results/host_transfer.csv` is the generated transfer source: it contains B2
+over all target rows, B2 over target test rows, and the rejected two-term
+absolute-time extension.
 
-| | train | test |
-|---|---|---|
-| B0 uncalibrated | 38.5 % | 47.2 % |
-| B1 calibrated, total params | 18.3 % | 49.6 % |
-| **B2 calibrated, active params** | **10.3 %** | **10.9 %** |
-| Prefill, η_p per host × quant | 18.7 % | 18.8 % |
+## Submission action
 
-The train/test gap is 0.6 points. That only appeared after the measurements were
-conditioned; before that it was 8 points and read as overfitting.
+Replace this placeholder in `paper/icassp2027/main.tex`:
 
-**Findings that hold:** MoE activated-parameter accounting (out-of-sample MoE
-error 81 % → 11 %); per-layer KV summation (corrects up to 13.7× overestimate on
-sliding-window models); the noise floor and load-contamination results; the
-quantisation ladder.
+```text
+Author Name
+Affiliation
+author@example.com
+```
 
-**Findings rejected, honestly, in the paper:** the output-projection correction
-(improves train, doubles test error — rejected); prefill is *not*
-quantisation-independent, contrary to the textbook split.
+with the verified author identity, then rebuild and recheck the PDFs. ICASSP
+2027 is not blind. Do not invent these fields.
 
-## What you must NOT redo
+The current generated artifacts are:
 
-Four bugs cost this project days each. All are fixed and have regression
-guards. If you see behaviour resembling them, check the guard before assuming a
-new bug.
+- `paper/icassp2027/gguf-throughput-icassp2027.pdf` — five pages: technical
+  content on pages 1--4 and references only on page 5
+- `paper/icassp2027/gguf-throughput-supplement.pdf` — 16 pages
 
-1. **Resume key never matched.** Keyed on requested `(n_prompt, n_gen)`, but
-   llama-bench writes prefill with `n_gen=0` and decode with `n_prompt=0`. Resume
-   silently never fired; every run re-measured everything into a different load
-   condition. Guard: `python -m llmperf.sweep --selfcheck`.
-2. **MoE expert tensors unmatched for fused architectures.** gemma-4 ships a
-   combined `ffn_gate_up_exps`; an enumerated name list missed it and counted
-   most expert weight as always-active. Now matches `_exps` generically, and
-   warns if a declared-sparse model resolves as >50 % active.
-3. **CSV schema drift.** Adding a column made the writer emit more values than
-   the on-disk header had, silently corrupting the file. Now migrates on append.
-4. **Load gate no-op on Windows** — relevant to you. `os.getloadavg()` is
-   Unix-only; NaN compares false against any threshold, so the gate silently
-   disabled itself. Fixed via psutil. **Verify `python -m llmperf.doctor` reports
-   a real load number before trusting any measurement you take.**
+Their SHA-256 values are `80C5F60A9050E6E1184195C388987CD5F4CDD578D8C0C7D36D26BE6838F2CE4A`
+and `38D8BA99504B0E0B9CC5AA659496343EE802C4C725CF79B76185C3C0454AEDDF`,
+respectively.
 
-## Traps already paid for
+The main-paper title is `GGUF-METADATA PREDICTION OF SINGLE-SEQUENCE LLAMA.CPP THROUGHPUT ACROSS TWO SYSTEMS`.
 
-- **`llama-bench -fa` defaults to `auto`** and silently picks different attention
-  kernels per model and backend. Pinned to `on`. Same reasoning for `-ctk`/`-ctv`
-  and `-t`.
-- **Calibrating on a model you also evaluate is circular.** All calibration
-  probes are excluded from scoring.
-- **The calibration anchor must be a large, high-precision model.** Anchoring on
-  the smallest one reports a floor, not a ceiling, and inflated every η by 1.49×.
-- **`huggingface_hub` stalls at zero bytes** on unauthenticated connections;
-  `fetch.py` uses plain ranged GETs. Set `HF_TOKEN` anyway.
-- **GGUF repos contain non-LM files** (`mmproj-*` vision projectors, `mtp-*`
-  heads). Filtered.
-- **Community finetunes are excluded on purpose** — modified weights confound.
-- **Agents told to "verify via web search" without a budget hang indefinitely.**
-  A 21-agent workflow burned 4 hours for zero output. Cap it.
+## Reproduce and validate
 
-## Your actual runbook
+From `C:\Users\lun\Papers\gguf-perf`:
 
 ```powershell
-git clone https://github.com/DHUer/gguf-perf.git ; cd gguf-perf
-py -3.13 -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\pip install torch --index-url https://download.pytorch.org/whl/cu128
-
-$env:LLMPERF_HOST = "thinkstation-5080"
-$env:HF_TOKEN     = "hf_..."
-
-.venv\Scripts\python -m llmperf.doctor      # DO NOT PROCEED ON A FAIL
-.venv\Scripts\python -m llmperf.campaign
+.\.venv\Scripts\python.exe -m llmperf.analyze
+.\.venv\Scripts\python.exe -m llmperf.refine
+.\.venv\Scripts\python.exe -m llmperf.figures
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe paper\icassp2027\audit_submission.py
+git diff --check
 ```
 
-**llama.cpp must be a CUDA 12.8+ build.** The 5080 is Blackwell, sm_120. Older
-builds have no kernels for it and fall back to CPU silently — which presents as
-"the GPU is slow", not as an error. `doctor` checks this explicitly.
+Build instructions and the local Tectonic command are in
+`paper/icassp2027/README.md`. The analysis does not require another model
+download.
 
-Then the offload cliff, which is the contribution nobody else has:
+## If the study is extended
+
+The highest-value extension is not another uninstrumented resident baseline.
+It is a planned discrete-GPU experiment with physical residency/spill
+telemetry, randomized execution order, additional held-out quantization
+families, and a declared partial-offload grid. Keep every lower-`ngl` row out of
+the current primary fit.
+
+For any new host:
 
 ```powershell
-.venv\Scripts\python -m llmperf.sweep --only Qwen3.8-27B  --force --ngl 0 8 16 24 32 48 99
-.venv\Scripts\python -m llmperf.sweep --only gpt-oss-20b  --force --ngl 0 8 16 24 32 48 99
+$env:LLMPERF_HOST = 'stable-host-name'
+$env:LLAMA_BENCH = 'C:\path\to\llama-bench.exe'
+.\.venv\Scripts\python.exe -m llmperf.doctor
+.\.venv\Scripts\python.exe -m llmperf.calibrate
+.\.venv\Scripts\python.exe -m llmperf.sweep --dry-run
 ```
 
-Pick three or four models straddling the 16 GB VRAM boundary. Do **not** run the
-ngl sweep across all 23 — 7× the cells for little extra signal.
+Do not run a download and benchmark concurrently. Preserve failed rows, raw
+logs, runtime identification, and model hashes; never relabel a prompt-batch
+failure as an out-of-memory failure without direct evidence.
 
-**gpt-oss-120b (63 GB) is the single most valuable cell you can produce.** It
-does not fit 16 GB VRAM and runs via offload into your 128 GB system RAM. The
-Mac Studio runs the same file fast in unified memory. That contrast is the
-paper's central argument and only these two machines together can show it.
+## Known traps with regression guards
 
-When done: `results/measurements_thinkstation-5080.csv` and
-`calibration_thinkstation-5080.json` are the deliverable. A few hundred KB.
-Commit and push.
+1. Resume keys must use the phase-specific values written by `llama-bench`.
+   Guard: `python -m llmperf.sweep --selfcheck`.
+2. Fused MoE tensors such as `ffn_gate_up_exps` must be included in activated
+   parameter accounting.
+3. CSV append must migrate schema before writing new columns.
+4. Windows load gating uses `psutil`; `os.getloadavg()` is unavailable.
+5. Final-protocol row selection is atomic. Never splice favorable fields from
+   different attempts.
+6. Flash attention and F16 K/V must remain pinned; backend-dependent `auto`
+   settings change the experiment.
 
-Then, and only then:
+## Source of truth
 
-```powershell
-.venv\Scripts\python -m llmperf.analyze   # leave-one-machine-out becomes defined
-.venv\Scripts\python -m llmperf.refine
-.venv\Scripts\python -m llmperf.figures   # fig9_offload_cliff will now generate
+```text
+llmperf/analyze.py                      fitting and host-separated validation
+llmperf/refine.py                       transfer and rejected extensions
+llmperf/figures.py                      publication figures
+results/measurements_lun-mac.csv        Mac raw measurements
+results/measurements_rtx5080.csv        RTX raw measurements
+results/host_transfer.csv               all-target/test B2 and two-term transfer
+results/STATUS.md                       audited cohort summary
+paper/icassp2027/main.tex               submission manuscript
+paper/icassp2027/generate_supplement.py supplement generator
+SESSION_CHECKPOINT.md                   restart-specific local state
 ```
 
-## Open issues you inherit
-
-1. **Citations.** Four verified against primary sources (RooflineBench
-   arXiv:2602.11506, LIMINAL arXiv:2507.14397, MoE-CAP arXiv:2412.07067,
-   Benazir & Lin arXiv:2508.08531 / POMACS 10.1145/3771563). **Six remain
-   unverified and are marked do-not-cite.** Every verification so far found the
-   survey agent had got something wrong. Do not trust `related_work.md` entries
-   that lack a VERIFIED marker, and do not treat a web-search summary as a
-   source.
-2. **Benazir & Lin is a closer competitor than first reported** — SIGMETRICS
-   2026, same setting, five testbeds, pre-empts our quantisation findings and the
-   unified-memory argument. The concession is written into §2. Our surviving
-   claim is prediction and out-of-sample validation, which they do not do.
-3. **A parallel Codex workspace exists** at `.workspaces/codex/` (gitignored,
-   31k files). It contains work not in the public repo: `llmperf/audit.py`,
-   `llmperf/render_paper.py`, `paper/DATA_COLLECTION.md`, and a different
-   `related_work.md`. **Two divergent versions of this paper exist.** Reconcile
-   before building further.
-4. **Stale numbers in prose.** Fossil tables have twice survived several
-   revisions (one said "31 %" when the value was 10.9 %; §5.3 carried a whole
-   table from a two-generation-old dataset). Before submission, cross-check every
-   percentage in the papers against live `analyze` output.
-5. **No LICENSE.** Empirical-SE venues expect one on artifacts.
-
-## House rules
-
-- **Never fabricate a number, citation, or result.** Unmeasured cells are marked
-  PENDING, never estimated. The author acts on what is written.
-- **Report negative results plainly.** Three hypotheses were rejected here and
-  saying so is part of the contribution.
-- **Reuse `llama-bench`.** Do not write a replacement timing harness.
-- **A surprising result is a suspect measurement first.** Every unexplained
-  architectural effect in this project turned out to be a disturbed measurement,
-  and the instrument had already flagged it.
-
-## Layout
-
-```
-llmperf/common.py         paths, llama-bench discovery, GGUF metadata, KV maths
-llmperf/doctor.py         environment check — run first on a new machine
-llmperf/fetch.py          model download + fixed train/test split manifest
-llmperf/calibrate.py      hardware microbenchmarks (CPU triad, device, LLM probe)
-llmperf/repeatability.py  noise floor — run before trusting any effect
-llmperf/sweep.py          drives llama-bench; load gate, CV retry, resumable CSV
-llmperf/campaign.py       unattended driver: fetch → sweep → analyze → repeat
-llmperf/analyze.py        fit, out-of-sample validation, diagnostics
-llmperf/refine.py         two-term model, leave-one-machine-out, eta spread
-llmperf/figures.py        publication figures (PDF + PNG, print-safe)
-paper/paper.md            the predictor paper
-paper/measurement_paper.md  the measurement paper (submittable now)
-paper/related_work.md     citation audit + verification log
-results/                  per-host CSV + calibration JSON (commit these)
-results/contaminated/     archived bad data, kept as evidence
-```
-
-Self-checks: `python -m llmperf.common`, `python -m llmperf.sweep --selfcheck`,
-`python -m llmperf.refine`.
+The older Markdown manuscripts under `paper/` are working history, not the
+submission source. Do not restore their superseded Mac-only numbers.

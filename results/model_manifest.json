@@ -1,0 +1,117 @@
+{
+  "Muse-Glimmer-30B-UD-Q4_K_XL.gguf": {
+    "repo_id": "unsloth/Muse-Glimmer-30B-GGUF",
+    "size_bytes": 15878222368,
+    "split": "test"
+  },
+  "NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf": {
+    "repo_id": "lmstudio-community/NVIDIA-Nemotron-3-Nano-4B-GGUF",
+    "size_bytes": 2837072896,
+    "split": "test"
+  },
+  "Nemotron-3-Nano-30B-A3B-Q4_K_M.gguf": {
+    "repo_id": "unsloth/Nemotron-3-Nano-30B-A3B-GGUF",
+    "size_bytes": 24574373664,
+    "split": "test"
+  },
+  "Qwen3.5-4B-Q4_K_M.gguf": {
+    "repo_id": "unsloth/Qwen3.5-4B-GGUF",
+    "size_bytes": 2740937888,
+    "split": "train"
+  },
+  "Qwen3.5-4B-Q8_0.gguf": {
+    "repo_id": "unsloth/Qwen3.5-4B-GGUF",
+    "size_bytes": 4482403488,
+    "split": "train"
+  },
+  "Qwen3.5-9B-Q4_K_M.gguf": {
+    "repo_id": "unsloth/Qwen3.5-9B-GGUF",
+    "size_bytes": 5680522464,
+    "split": "train"
+  },
+  "Qwen3.5-9B-Q8_0.gguf": {
+    "repo_id": "unsloth/Qwen3.5-9B-GGUF",
+    "size_bytes": 9527502048,
+    "split": "train"
+  },
+  "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf": {
+    "repo_id": "unsloth/Qwen3.6-35B-A3B-GGUF",
+    "size_bytes": 22134528992,
+    "split": "train"
+  },
+  "Qwen3.8-27B-Q8_0.gguf": {
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "size_bytes": 29047086048,
+    "split": "train"
+  },
+  "Qwen3.8-27B-UD-IQ2_XXS.gguf": {
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "size_bytes": 7266070528,
+    "split": "train"
+  },
+  "Qwen3.8-27B-UD-IQ3_XXS.gguf": {
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "size_bytes": 10934860704,
+    "split": "train"
+  },
+  "Qwen3.8-27B-UD-Q2_K_XL.gguf": {
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "size_bytes": 9828981664,
+    "split": "train"
+  },
+  "Qwen3.8-27B-UD-Q3_K_XL.gguf": {
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "size_bytes": 13146393504,
+    "split": "train"
+  },
+  "Qwen3.8-27B-UD-Q4_K_XL.gguf": {
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "size_bytes": 17559178144,
+    "split": "train"
+  },
+  "Qwen3.8-27B-UD-Q5_K_XL.gguf": {
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "size_bytes": 20876938144,
+    "split": "train"
+  },
+  "Qwen3.8-27B-UD-Q6_K_XL.gguf": {
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "size_bytes": 25299061664,
+    "split": "train"
+  },
+  "SmolLM3-Q4_K_M.gguf": {
+    "repo_id": "ggml-org/SmolLM3-3B-GGUF",
+    "size_bytes": 1915305312,
+    "split": "train"
+  },
+  "SmolLM3-Q8_0.gguf": {
+    "repo_id": "ggml-org/SmolLM3-3B-GGUF",
+    "size_bytes": 3275574624,
+    "split": "train"
+  },
+  "gemma-4-12b-it-qat-q4_0.gguf": {
+    "repo_id": "google/gemma-4-12B-it-qat-q4_0-gguf",
+    "size_bytes": 6975879296,
+    "split": "train"
+  },
+  "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf": {
+    "repo_id": "unsloth/gemma-4-26B-A4B-it-GGUF",
+    "size_bytes": 16947541728,
+    "split": "train"
+  },
+  "gpt-oss-120b-MXFP4.gguf": {
+    "repo_id": "ggml-org/gpt-oss-120b-GGUF",
+    "size_bytes": 63387346208,
+    "split": "test"
+  },
+  "gpt-oss-20b-MXFP4.gguf": {
+    "repo_id": "ggml-org/gpt-oss-20b-GGUF",
+    "size_bytes": 12109566624,
+    "split": "train"
+  },
+  "inclusionAI_Ling-mini-2.0-Q4_K_M.gguf": {
+    "repo_id": "bartowski/inclusionAI_Ling-mini-2.0-GGUF",
+    "size_bytes": 9941894336,
+    "split": "test"
+  }
+}

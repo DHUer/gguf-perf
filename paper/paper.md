@@ -1,5 +1,10 @@
 # Ten Minutes of Calibration: Predicting Local LLM Inference Throughput on Consumer Hardware
 
+> **ARCHIVED WORKING DRAFT — DO NOT CITE NUMBERS FROM THIS FILE.** The current
+> ICASSP 2027 paper and complete results appendix are in `paper/icassp2027/`.
+> This file preserves superseded mixed-session analyses and pending experiment
+> notes; it is not the submission source or an authoritative results record.
+>
 > **STATUS.** Sections 1–4 are complete. Section 5 (Results) is generated from
 > `results/` and is filled in only for measurements that have actually been run.
 > Any cell not yet measured is listed as PENDING rather than estimated. No number
@@ -316,9 +321,11 @@ faithful quantisations (`ggml-org`, `google`, `unsloth`, `lmstudio-community`,
 `bartowski`); community finetunes with modified weights are excluded because
 they change what is being measured.
 
-The train/test split is fixed at download time in `models/manifest.json`, not
-at analysis time — deciding it after seeing errors would turn out-of-sample
-validation into cherry-picking.
+The train/test split is fixed at download time in `models/manifest.json`, with
+an exact tracked snapshot in `results/model_manifest.json`, not at analysis
+time — deciding it after seeing errors would turn out-of-sample validation into
+cherry-picking. New CSV rows also carry the split; analysis rejects an unknown
+or conflicting assignment rather than silently treating it as training data.
 
 - **TRAIN** — dense SmolLM3-3B, Qwen3.5-4B, Qwen3.5-9B, gemma-4-12B (QAT),
   Qwen3.6-27B; MoE gpt-oss-20b (MXFP4), gemma-4-26B-A4B, Qwen3.6-35B-A3B.
@@ -347,7 +354,9 @@ Every default that could confound a cross-model comparison is pinned:
 
 KV depths of 0, 4096, and 16384 tokens exercise the `kv_bytes(c)` term; without
 a depth sweep that term is untestable. On the discrete-GPU machine `n_gpu_layers`
-is swept to trace the offload cliff.
+is swept to trace the offload cliff. Predictor fits, validation tables, and the
+primary figures use only the declared `n_gpu_layers=99` baseline; lower offload
+levels are retained exclusively for the offload-cliff analysis.
 
 Every result row records the git commit, llama-bench version, host, and the
 full cell identity. The sweep is append-only and resumable.
@@ -836,11 +845,12 @@ What remains, in order:
    analysis suggested 8–11 for an effect of the plausible size, so this is close
    but not yet sufficient.
 
-Step 1 was the designated go/no-go. On the evidence above the project passes it:
-η is stable enough within a quantisation group (1.7–1.9×) that a predictor is
-viable, and the two-term model reaches 9.0 % train error. The claim that
-survives is narrower than originally drafted — an empirical correction rather
-than a validated mechanism — but it is a claim.
+Step 1 was the designated go/no-go. On the evidence above the project passes
+the broader viability test: η is stable enough within a quantisation group for
+the calibrated one-term predictor to generalise out of sample. It does **not**
+pass the test for the output-projection extension, whose lower training error
+does not survive held-out evaluation. The surviving claim is therefore the
+one-term predictor; the proposed empirical correction is rejected.
 
 ### 5.9 The offload cliff
 

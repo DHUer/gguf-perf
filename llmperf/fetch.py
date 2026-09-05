@@ -31,7 +31,7 @@ import sys
 import time
 from pathlib import Path
 
-from .common import MODELS_DIR
+from .common import MODELS_DIR, RESULTS_DIR
 
 # (repo_id, quant regex, split) where split is "train" or "test".
 # Sizes span ~0.5 GB to ~65 GB so the roofline fit has real leverage instead of
@@ -84,11 +84,43 @@ TEST = [
     ("ggml-org/gpt-oss-120b-GGUF",                             r"\.gguf$", "test"),
 ]
 
-# Small and fast: enough to validate the pipeline end to end in under an hour.
-PILOT = [t for t in TRAIN if any(k in t[0] for k in ("SmolLM3", "Qwen3.5-4B"))]
+# Small enough for a 16-GB discrete GPU, while retaining both sides of the
+# declared split.  The Q8 train variants also support an independent
+# quantization/calibration diagnostic; held-out scoring uses the two Q4 files.
+PILOT = (
+    [t for t in TRAIN if any(k in t[0] for k in ("SmolLM3", "Qwen3.5-4B"))]
+    + [t for t in TEST if any(k in t[0] for k in
+                              ("NVIDIA-Nemotron-3-Nano-4B", "Ling-mini-2.0"))]
+)
 
 SETS = {"pilot": PILOT, "train": TRAIN, "ladder": LADDER, "test": TEST,
         "all": TRAIN + LADDER + TEST}
+
+
+def update_manifest(path: Path, plan: list[tuple[str, str, int, str]]) -> None:
+    """Merge resolved files into a manifest without allowing split drift."""
+    manifest = {}
+    if path.exists():
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise ValueError(f"cannot read existing manifest {path}: {e}") from e
+    if not isinstance(manifest, dict):
+        raise ValueError(f"manifest {path} must contain a JSON object")
+
+    for repo_id, fname, size, split in plan:
+        name = Path(fname).name
+        previous = manifest.get(name)
+        previous_split = previous.get("split") if isinstance(previous, dict) else None
+        if previous_split is not None and previous_split != split:
+            raise ValueError(
+                f"refusing to change fixed split for {name}: "
+                f"{previous_split!r} -> {split!r}")
+        manifest[name] = {"repo_id": repo_id, "split": split,
+                          "size_bytes": size}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8")
 
 
 def pick_file(repo_id: str, pattern: str):
@@ -293,26 +325,25 @@ def main(argv=None) -> int:
             print(f"[FAIL] {repo_id}/{fname}: {type(e).__name__}: {e}", file=sys.stderr)
             failed += 1
 
-    # Record the train/test split at download time, not at analysis time. If the
-    # split were decided later it could be nudged after seeing the errors, which
-    # would quietly turn out-of-sample validation into cherry-picking.
-    manifest_path = args.out / "manifest.json"
-    manifest = {}
-    if manifest_path.exists():
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except Exception:
-            manifest = {}
-    for repo_id, fname, size, split in plan:
-        manifest[Path(fname).name] = {"repo_id": repo_id, "split": split,
-                                      "size_bytes": size}
-    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True),
-                             encoding="utf-8")
+    # Record the train/test split at download time, not at analysis time. The
+    # live copy stays beside the weights; a second, tracked snapshot stays with
+    # the results so a clean clone can reproduce the held-out evaluation. If
+    # the split were decided later it could be nudged after seeing the errors,
+    # which would quietly turn validation into cherry-picking.
+    manifest_paths = [args.out / "manifest.json"]
+    if args.out.resolve() == MODELS_DIR.resolve():
+        manifest_paths.append(RESULTS_DIR / "model_manifest.json")
+    try:
+        for manifest_path in manifest_paths:
+            update_manifest(manifest_path, plan)
+    except ValueError as e:
+        print(f"[FAIL] {e}", file=sys.stderr)
+        return 2
 
     have = list(args.out.glob("*.gguf"))
     print(f"\n{ok} ok, {failed} failed, {len(unresolved)} unresolved. "
           f"{len(have)} GGUF files, {sum(p.stat().st_size for p in have)/1e9:.1f} GB.")
-    print(f"split manifest -> {manifest_path}")
+    print("split manifest -> " + ", ".join(str(p) for p in manifest_paths))
     return 1 if failed and not ok else 0
 
 

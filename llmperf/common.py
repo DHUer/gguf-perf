@@ -46,10 +46,95 @@ def platform_tag() -> str:
     return f"{platform.system()}-{platform.machine()}"
 
 
+def load_model_splits(models_dir: Path = MODELS_DIR,
+                      results_dir: Path = RESULTS_DIR) -> dict[str, str]:
+    """Load fixed train/test assignments from every available manifest.
+
+    ``models/manifest.json`` is the live download manifest and normally lives
+    beside the (gitignored) weights. ``results/model_manifest.json`` is its
+    tracked snapshot, so a clean clone can reproduce the split used by the
+    committed measurements without downloading hundreds of gigabytes first.
+
+    A disagreement is an error rather than a last-writer-wins merge: silently
+    changing a model's split after observing its error would invalidate the
+    held-out evaluation.
+    """
+    paths = [Path(results_dir) / "model_manifest.json",
+             Path(models_dir) / "manifest.json"]
+    splits: dict[str, str] = {}
+    seen_paths: set[str] = set()
+    for path in paths:
+        key = str(path.resolve())
+        if key in seen_paths or not path.exists():
+            continue
+        seen_paths.add(key)
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise ValueError(f"cannot read model manifest {path}: {e}") from e
+        if not isinstance(manifest, dict):
+            raise ValueError(f"model manifest {path} must contain a JSON object")
+        for filename, entry in manifest.items():
+            split = entry.get("split") if isinstance(entry, dict) else None
+            if split not in {"train", "test"}:
+                raise ValueError(
+                    f"model manifest {path} has invalid split for {filename!r}: "
+                    f"{split!r}")
+            previous = splits.get(filename)
+            if previous is not None and previous != split:
+                raise ValueError(
+                    f"conflicting split provenance for {filename!r}: "
+                    f"{previous!r} versus {split!r} in {path}")
+            splits[filename] = split
+    return splits
+
+
+def load_model_metadata(results_dir: Path = RESULTS_DIR) -> dict[str, dict]:
+    """Load the auditable metadata snapshot stored beside committed results.
+
+    The GGUF files remain the primary source whenever they are available. This
+    snapshot preserves the exact derived fields needed to replay analysis on a
+    clean clone where hundreds of gigabytes of model weights are intentionally
+    absent.
+    """
+    path = Path(results_dir) / "model_metadata.json"
+    if not path.exists():
+        return {}
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise ValueError(f"cannot read model metadata snapshot {path}: {e}") from e
+    if not isinstance(doc, dict) or doc.get("schema_version") != 1:
+        raise ValueError(f"unsupported model metadata snapshot schema in {path}")
+    models = doc.get("models")
+    if not isinstance(models, dict):
+        raise ValueError(f"model metadata snapshot {path} has no models object")
+
+    required = {
+        "arch", "file_bytes", "n_params", "n_active_params", "n_layers",
+        "n_kv_heads", "head_dim", "n_expert", "n_expert_used", "quant",
+        "kv_bytes_by_depth", "vocab_size", "d_model",
+    }
+    for filename, entry in models.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"metadata for {filename!r} in {path} is not an object")
+        missing = sorted(required - entry.keys())
+        if missing:
+            raise ValueError(
+                f"metadata for {filename!r} in {path} lacks: {', '.join(missing)}")
+        kv = entry["kv_bytes_by_depth"]
+        if not isinstance(kv, dict) or not kv:
+            raise ValueError(
+                f"metadata for {filename!r} in {path} has no KV-depth mapping")
+    return models
+
+
 def find_llama_bench() -> Path:
     """Locate the llama-bench binary on macOS or Windows.
 
-    Honours LLAMA_BENCH first so a user can point at a custom build.
+    Honours LLAMA_BENCH first so a user can point at a custom build.  On
+    Windows, also recognize versioned binaries installed by this project under
+    ``%LOCALAPPDATA%\\gguf-perf`` so the runner survives a new shell or reboot.
     """
     override = os.environ.get("LLAMA_BENCH")
     if override:
@@ -63,7 +148,16 @@ def find_llama_bench() -> Path:
         if found:
             return Path(found)
 
-    candidates = [
+    managed: list[Path] = []
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if platform.system() == "Windows" and local_appdata:
+        managed = sorted(
+            (Path(local_appdata) / "gguf-perf").glob(
+                "llama-*/llama-bench.exe"),
+            reverse=True,
+        )
+
+    candidates = managed + [
         Path("/opt/homebrew/bin/llama-bench"),
         Path("/usr/local/bin/llama-bench"),
         ROOT / "llama.cpp" / "build" / "bin" / "llama-bench",

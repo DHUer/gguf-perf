@@ -7,6 +7,8 @@ gguf>=0.10
 # the sweep's load gate silently no-ops on Windows.
 psutil>=5.9
 huggingface_hub>=0.24
+# PDF compliance audit for the ICASSP manuscript and supplement.
+PyMuPDF>=1.24
 # Optional. Only needed on the discrete-GPU machine, to measure real device
 # bandwidth and FLOPS. Everything else runs without it.
 #   Windows + RTX 5080 (Blackwell, sm_120) needs a cu128 build:

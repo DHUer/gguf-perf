@@ -46,18 +46,20 @@ from scipy.optimize import least_squares
 # from this module are styled identically to the rest of the paper's without
 # copying the block.
 from .analyze import (ape, add_features, load_calibration, load_measurements,
-                      load_splits)
+                      load_splits, select_primary_measurements)
 import matplotlib.pyplot as plt
 
-from .common import FIGURES_DIR, MODELS_DIR, RESULTS_DIR, read_gguf_meta
+from .common import (FIGURES_DIR, MODELS_DIR, RESULTS_DIR, load_model_metadata,
+                     read_gguf_meta)
 
 
 # --------------------------------------------------------------------------
 # loading
 # --------------------------------------------------------------------------
 
-def model_shapes(model_files: list[str], models_dir: Path) -> pd.DataFrame:
-    """vocab_size and d_model per GGUF file.
+def model_shapes(model_files: list[str], models_dir: Path,
+                 metadata: dict[str, dict] | None = None) -> pd.DataFrame:
+    """Load output-projection shapes from GGUFs or the audited snapshot.
 
     Neither is in the measurement CSV -- sweep.py's CSV_FIELDS predates this
     question and we must not edit it while a campaign is writing to it -- so
@@ -66,39 +68,73 @@ def model_shapes(model_files: list[str], models_dir: Path) -> pd.DataFrame:
     of token_embd.weight, which is present even in files whose architecture
     omits a vocab_size metadata key (every Qwen3.x file here does).
 
-    A missing or unreadable file yields no row rather than an exception: the
-    measurement CSV outlives the weights on a disk-constrained machine.
+    Live GGUF metadata takes precedence. The snapshot preserves vocab and model
+    width on disk-constrained clean clones. Older snapshots may omit optional
+    embedding-layout fields; in that case only the streamed-embedding ablation
+    is unavailable, and a warning is emitted.
     """
     from gguf import GGUFReader  # lazy, matching common.read_gguf_meta
 
-    rows = []
+    metadata = metadata or {}
+    rows, missing, incomplete = [], [], []
     for name in sorted(set(model_files)):
         path = models_dir / name
-        if not path.is_file():
-            continue
-        try:
-            meta = read_gguf_meta(path)
-            reader = GGUFReader(str(path))
-            vocab = 0
-            for t in reader.tensors:
-                if t.name == "token_embd.weight":
-                    # GGUF stores ne as [n_embd, n_vocab].
-                    vocab = int(t.shape[-1])
-                    break
-            if not vocab:
-                tok = reader.fields.get("tokenizer.ggml.tokens")
-                vocab = int(len(tok.data)) if tok is not None else 0
-        except Exception as e:  # a truncated download must not kill the run
-            print(f"[skip shapes] {name}: {e}")
+        snapshot = metadata.get(name) or {}
+        shape = None
+        if path.is_file():
+            try:
+                meta = read_gguf_meta(path)
+                reader = GGUFReader(str(path))
+                vocab = 0
+                for t in reader.tensors:
+                    if t.name == "token_embd.weight":
+                        # GGUF stores ne as [n_embd, n_vocab].
+                        vocab = int(t.shape[-1])
+                        break
+                if not vocab:
+                    tok = reader.fields.get("tokenizer.ggml.tokens")
+                    vocab = int(len(tok.data)) if tok is not None else 0
+                shape = {
+                    "vocab_size": vocab, "d_model": meta.n_embd,
+                    "embd_bytes": meta.embd_bytes,
+                    "tied_embeddings": meta.tied_embeddings,
+                }
+                disagreements = [
+                    k for k in ("vocab_size", "d_model")
+                    if snapshot.get(k) is not None and snapshot[k] != shape[k]
+                ]
+                if disagreements:
+                    print(f"WARNING: live GGUF shapes for {name} differ from "
+                          f"the frozen snapshot in {', '.join(disagreements)}; "
+                          f"using live GGUF")
+            except Exception as e:
+                print(f"WARNING: cannot read shapes from {path}; trying audited "
+                      f"snapshot ({type(e).__name__}: {e})")
+        if shape is None and snapshot.get("vocab_size") \
+                and snapshot.get("d_model"):
+            shape = {
+                "vocab_size": int(snapshot["vocab_size"]),
+                "d_model": int(snapshot["d_model"]),
+                "embd_bytes": snapshot.get("embd_bytes"),
+                "tied_embeddings": snapshot.get("tied_embeddings"),
+            }
+            if shape["embd_bytes"] is None or shape["tied_embeddings"] is None:
+                incomplete.append(name)
+        if shape is None:
+            missing.append(name)
             continue
         rows.append({
             "model_file": name,
-            "vocab_size": vocab,
-            "d_model": meta.n_embd,
-            "embd_bytes": meta.embd_bytes,
-            "tied_embeddings": meta.tied_embeddings,
+            **shape,
         })
-    return pd.DataFrame(rows)
+    if incomplete:
+        print(f"WARNING: audited snapshot lacks embedding-layout metadata for "
+              f"{len(incomplete)} model(s); the optional streamed-embedding "
+              f"ablation treats their full files as streamed")
+    if missing:
+        print(f"WARNING: no output-projection shapes for: {', '.join(missing)}")
+    return pd.DataFrame(rows, columns=[
+        "model_file", "vocab_size", "d_model", "embd_bytes", "tied_embeddings"])
 
 
 def collapse_repeats(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -139,9 +175,15 @@ def load_rows(results_dir: Path = RESULTS_DIR, models_dir: Path = MODELS_DIR,
     if not cal:
         raise SystemExit(f"No calibration_*.json in {results_dir}. "
                          f"Run `python -m llmperf.calibrate` first.")
-    df = add_features(df, cal, load_splits(models_dir))
+    metadata = load_model_metadata(results_dir)
+    df = add_features(df, cal, load_splits(models_dir, results_dir),
+                      metadata, models_dir)
 
-    dec = df[(df["phase"] == "decode") & df["bw"].notna()].reset_index(drop=True)
+    all_dec = df[(df["phase"] == "decode") & df["bw"].notna()].reset_index(drop=True)
+    dec = select_primary_measurements(all_dec).reset_index(drop=True)
+    if len(dec) < len(all_dec):
+        print(f"excluding {len(all_dec) - len(dec)} partial-offload decode "
+              f"row(s) from refinement fits")
     # eta is 1.0 by construction on the llm_ref probe model; keeping it would
     # flatter every number below. analyze.py drops it for the same reason.
     dec = dec[~dec["is_calibration_probe"]].reset_index(drop=True)
@@ -150,7 +192,7 @@ def load_rows(results_dir: Path = RESULTS_DIR, models_dir: Path = MODELS_DIR,
     if collapse:
         dec, dis = collapse_repeats(dec)
 
-    shapes = model_shapes(dec["model_file"].tolist(), models_dir)
+    shapes = model_shapes(dec["model_file"].tolist(), models_dir, metadata)
     dec = dec.merge(shapes, on="model_file", how="left")
 
     dec["t_meas"] = 1.0 / dec["avg_ts"]
@@ -361,6 +403,50 @@ def leave_one_machine_out(df: pd.DataFrame, use_output_term: bool,
     return pd.DataFrame(rows)
 
 
+def leave_one_machine_out_b2(
+        df: pd.DataFrame, target_split: str | None = None) -> pd.DataFrame:
+    """Transfer the paper's median-ratio B2 coefficients to an unseen host.
+
+    The main predictor fits one median efficiency per host and quantization.
+    With the target host held out, use the source-host coefficient for the same
+    quantization and a source-wide median for a format absent from training.
+    This is distinct from the least-squares refinement experiment above.
+    """
+    hosts = sorted(df["host"].unique())
+    if len(hosts) < 2:
+        return pd.DataFrame()
+
+    rows = []
+    if target_split not in {None, "train", "test"}:
+        raise ValueError("target_split must be None, 'train', or 'test'")
+    for host in hosts:
+        train = df[(df["host"] != host) & (df["split"] == "train")]
+        held = df[df["host"] == host]
+        if target_split is not None:
+            held = held[held["split"] == target_split]
+        if train.empty or held.empty:
+            rows.append({"held_out_host": host, "n_train": len(train),
+                         "n_held": len(held), "MAPE_%": np.nan})
+            continue
+        eta = (train["avg_ts"] * train["bytes_active"] / train["bw"]
+               ).groupby(train["quant"]).median()
+        fallback = float(eta.median())
+        transferred = np.array([float(eta.get(q, fallback))
+                                for q in held["quant"]])
+        prediction = (transferred * held["bw"].to_numpy(float)
+                      / held["bytes_active"].to_numpy(float))
+        error = ape(prediction, held["avg_ts"].to_numpy(float))
+        rows.append({
+            "held_out_host": host,
+            "n_train": len(train),
+            "n_held": len(held),
+            "MAPE_%": error.mean(),
+            "median_APE_%": float(np.median(error)),
+            "max_APE_%": error.max(),
+        })
+    return pd.DataFrame(rows)
+
+
 # --------------------------------------------------------------------------
 # figure
 # --------------------------------------------------------------------------
@@ -440,9 +526,9 @@ def main(argv=None) -> int:
               f"median {dis['ratio'].median():.2f}x. Keeping the fastest of each.")
         print(dis.head(5)[["model_file", "n_depth", "slowest", "fastest", "ratio"]]
               .round(2).to_string(index=False))
-        print("   (sweep.py's resume key cannot match a written row, so a "
-              "re-run re-measures everything; the repeats above are not noise, "
-              "they are two different machine states.)\n")
+        print("   (historical rows predate the resume-key fix; the repeats above "
+              "are not necessarily noise, but can represent different machine "
+              "states.)\n")
 
     missing = sorted(dec.loc[dec["vocab_size"].isna(), "model_file"].unique())
     if missing:
@@ -542,10 +628,31 @@ def main(argv=None) -> int:
     print(pd.DataFrame(rows).round(1).to_string(index=False))
 
     # ---- 3. leave one machine out ---------------------------------------
-    print("\n=== leave-one-machine-out ===")
-    lomo = leave_one_machine_out(dec, use_output_term=True)
-    if not lomo.empty:
-        print(lomo.round(1).to_string(index=False))
+    print("\n=== leave-one-machine-out: B2 median-ratio transfer (all target rows) ===")
+    lomo_b2_all = leave_one_machine_out_b2(dec)
+    if not lomo_b2_all.empty:
+        print(lomo_b2_all.round(1).to_string(index=False))
+    print("\n=== leave-one-machine-out: B2 transfer (target TEST rows only) ===")
+    lomo_b2_test = leave_one_machine_out_b2(dec, target_split="test")
+    if not lomo_b2_test.empty:
+        print(lomo_b2_test.round(1).to_string(index=False))
+
+    print("\n=== leave-one-machine-out: rejected two-term extension ===")
+    lomo_two = leave_one_machine_out(dec, use_output_term=True)
+    if not lomo_two.empty:
+        print(lomo_two.round(1).to_string(index=False))
+    if not lomo_b2_all.empty or not lomo_b2_test.empty or not lomo_two.empty:
+        transfer_rows = []
+        for variant, table in (("B2 median-ratio (all target)", lomo_b2_all),
+                               ("B2 median-ratio (target test)", lomo_b2_test),
+                               ("two-term absolute-time", lomo_two)):
+            if table.empty:
+                continue
+            block = table.copy()
+            block.insert(0, "variant", variant)
+            transfer_rows.append(block)
+        pd.concat(transfer_rows, ignore_index=True).round(4).to_csv(
+            args.results / "host_transfer.csv", index=False)
 
     # ---- 4. is any of this above the measurement floor? ------------------
     if not dis.empty and not multi.empty:
@@ -657,6 +764,9 @@ def _selfcheck() -> None:
     lomo = leave_one_machine_out(two, use_output_term=True)
     assert set(lomo["held_out_host"]) == {"H1", "H2"}, lomo
     assert lomo["MAPE_%"].notna().all(), lomo
+    lomo_b2 = leave_one_machine_out_b2(two)
+    assert set(lomo_b2["held_out_host"]) == {"H1", "H2"}, lomo_b2
+    assert lomo_b2["MAPE_%"].notna().all(), lomo_b2
 
     # 7. repeat collapse keeps the fastest observation of a cell.
     dup = pd.DataFrame({

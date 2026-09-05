@@ -408,3 +408,8 @@ turned a model that appeared to overfit into one that generalises, and dissolved
 an architectural anomaly that had consumed weeks.
 
 The instrument was telling us the whole time. We were not writing it down.
+# Archived measurement-methods draft
+
+> **DO NOT CITE NUMBERS FROM THIS FILE.** This draft predates the strict
+> protocol-complete row selector. The current paper and results appendix are in
+> `paper/icassp2027/`.

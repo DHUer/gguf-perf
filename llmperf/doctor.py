@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import math
 import os
 import platform
 import shutil
@@ -43,7 +44,10 @@ def check_python() -> None:
 
 
 def check_deps() -> None:
-    required = ["numpy", "pandas", "matplotlib", "scipy", "gguf", "huggingface_hub"]
+    required = [
+        "numpy", "pandas", "matplotlib", "scipy", "gguf", "psutil",
+        "huggingface_hub",
+    ]
     missing = []
     versions = []
     for mod in required:
@@ -127,9 +131,9 @@ def check_llama_bench(quick: bool) -> Path | None:
 
 
 def check_selfchecks() -> None:
-    for mod in ("llmperf.common", "llmperf.sweep"):
+    for mod in ("llmperf.common", "llmperf.sweep", "llmperf.refine"):
         argv = [sys.executable, "-m", mod]
-        if mod.endswith("sweep"):
+        if mod in ("llmperf.sweep", "llmperf.refine"):
             argv.append("--selfcheck")
         try:
             out = subprocess.run(argv, cwd=ROOT, capture_output=True,
@@ -152,6 +156,22 @@ def check_threads() -> None:
               f"{n} threads (logical CPUs: {os.cpu_count()})")
     except Exception as e:
         check("thread count", WARN, f"{type(e).__name__}: {e}")
+
+
+def check_load_average() -> None:
+    from .sweep import load_average
+    try:
+        load = load_average()
+        if math.isfinite(load) and load >= 0:
+            detail = (f"{load:.1f} busy logical CPUs (1 s sample)"
+                      if platform.system() == "Windows"
+                      else f"{load:.1f} (1 min average)")
+            check("system load", PASS, detail)
+        else:
+            check("system load", FAIL,
+                  "load metric is unavailable — verify psutil is installed")
+    except Exception as e:
+        check("system load", FAIL, f"{type(e).__name__}: {e}")
 
 
 def check_disk() -> None:
@@ -254,6 +274,7 @@ def main(argv=None) -> int:
     binary = check_llama_bench(args.quick)
     check_selfchecks()
     check_threads()
+    check_load_average()
     check_disk()
     check_network()
     check_models()

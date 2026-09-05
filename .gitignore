@@ -25,3 +25,18 @@ results/_refine.out
 
 # Local agent state
 .claude/
+
+# Supplied ICASSP author kit: keep only the source files needed to reproduce
+# the paper; omit legacy Word/PostScript examples and duplicate guide PDFs.
+.submission_reqiurement/*
+!.submission_reqiurement/IEEEbib.bst
+!.submission_reqiurement/spconf.sty
+
+# ICASSP LaTeX intermediates (the final PDF is committed separately)
+paper/icassp2027/build/
+paper/icassp2027/supplement-build/
+paper/icassp2027/*.aux
+paper/icassp2027/*.bbl
+paper/icassp2027/*.blg
+paper/icassp2027/*.log
+paper/icassp2027/*.out

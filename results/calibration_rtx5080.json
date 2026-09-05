@@ -1,0 +1,40 @@
+{
+  "host": "rtx5080",
+  "platform": "Windows-AMD64",
+  "timestamp": "2026-09-03T23:38:00.101550-07:00",
+  "git_commit": "1bdce5e",
+  "cpu": "AMD64 Family 25 Model 24 Stepping 1, AuthenticAMD",
+  "cpu_count": 64,
+  "python": "3.12.4+meta",
+  "cpu_triad": {
+    "gb_s": 13.457659893071822,
+    "array_mib": 512,
+    "reps": 7,
+    "median_s": 0.12371170000005804
+  },
+  "cpu_matmul": {
+    "gflops": 2313.518353461723,
+    "n": 4096,
+    "reps": 5,
+    "dtype": "float32"
+  },
+  "torch_gpu": {
+    "available": true,
+    "backend": "cuda",
+    "name": "NVIDIA GeForce RTX 5080",
+    "vram_gb": 17.094475776,
+    "copy_gb_s": 801.0607470628921,
+    "fp16_tflops": 118.82886747355873,
+    "capability": "12.0",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8"
+  },
+  "llm_ref": {
+    "available": false,
+    "reason": "skipped"
+  },
+  "caveats": {
+    "cpu_triad_valid_for_gpu": true,
+    "note": "On a discrete GPU the CPU triad measures host RAM, which is the relevant term only for offloaded layers; use torch_gpu for resident layers."
+  }
+}

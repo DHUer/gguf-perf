@@ -1,0 +1,19 @@
+{
+  "host": "rtx5080",
+  "platform": "Windows-AMD64",
+  "python": "3.12.4+meta (main, Jun  7 2024, 21:47:29) [MSC v.1938 64 bit (AMD64)]",
+  "llama_bench": "C:\\Users\\lun\\AppData\\Local\\gguf-perf\\llama-b10794\\llama-bench.exe",
+  "llama_bench_version": "usage: C:\\Users\\lun\\AppData\\Local\\gguf-perf\\llama-b10794\\llama-bench.exe [options]",
+  "threads": 16,
+  "git_commit": "1bdce5e",
+  "cpu": "AMD64 Family 25 Model 24 Stepping 1, AuthenticAMD",
+  "timestamp": "2026-09-04T11:32:17.217616-07:00",
+  "protocol": {
+    "flash_attn": "on (pinned)",
+    "cache_type_k": "f16",
+    "cache_type_v": "f16",
+    "repetitions": 5,
+    "settle_seconds": 45.0,
+    "warmup": "llama-bench default (enabled)"
+  }
+}

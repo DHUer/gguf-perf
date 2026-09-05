@@ -27,6 +27,7 @@ import argparse
 import csv
 import datetime as dt
 import json
+import math
 import os
 import platform
 import subprocess
@@ -35,8 +36,8 @@ import time
 from pathlib import Path
 
 from .common import (FIGURES_DIR, MODELS_DIR, RESULTS_DIR, discover_models,
-                     find_llama_bench, git_commit, host_id, platform_tag,
-                     read_gguf_meta, write_json)
+                     find_llama_bench, git_commit, host_id, load_model_splits,
+                     platform_tag, read_gguf_meta, write_json)
 
 # Prefill is compute-bound and decode is memory-bound, so both are measured.
 DEFAULT_PROMPT = 512
@@ -44,6 +45,12 @@ DEFAULT_GEN = 128
 # KV-cache depths. The decode roofline predicts throughput decays as the KV
 # cache grows; without a depth sweep that term is untestable.
 DEFAULT_DEPTHS = [0, 4096, 16384]
+
+# Windows has no native load average, and psutil's emulation can remain at
+# (0.0, 0.0, 0.0) even while a CPU is busy. Sample total CPU use instead and
+# convert it to the equivalent number of busy logical CPUs. That preserves the
+# scale used by the default max-load threshold (1.5 * benchmark threads).
+_WINDOWS_LOAD_SAMPLE_S = 1.0
 
 CSV_FIELDS = [
     "timestamp", "host", "platform", "git_commit", "llama_bench_version",
@@ -140,7 +147,11 @@ def llama_bench_version(binary: Path) -> str:
 
 
 def load_average() -> float:
-    """1-minute load average, or NaN where unavailable.
+    """System load in busy-CPU units, or NaN where unavailable.
+
+    POSIX returns the 1-minute load average. Windows returns the number of
+    logical CPUs that were busy during a one-second sample; for example, 25%
+    total CPU use on a 16-thread host is reported as 4.0.
 
     Recorded around every cell because "the machine was idle" is an assumption,
     not a fact. On a corporate-managed host, endpoint-monitoring and
@@ -149,12 +160,14 @@ def load_average() -> float:
     comparable to one taken in a quiet window. Storing it makes contaminated
     cells filterable after the fact instead of silently poisoning the dataset.
     """
-    # os.getloadavg() does not exist on Windows. psutil emulates it there, and
-    # without this the gate degrades to a no-op on exactly the platform the
-    # discrete-GPU measurements come from -- silently, because NaN compares
-    # false against any threshold.
+    # Without psutil the gate degrades to a no-op on Windows -- silently,
+    # because NaN compares false against any threshold.
     try:
         import psutil
+        if platform.system() == "Windows":
+            logical_cpus = psutil.cpu_count(logical=True) or os.cpu_count() or 1
+            cpu_pct = psutil.cpu_percent(interval=_WINDOWS_LOAD_SAMPLE_S)
+            return float(cpu_pct) * logical_cpus / 100.0
         return float(psutil.getloadavg()[0])
     except Exception:
         pass
@@ -165,7 +178,7 @@ def load_average() -> float:
 
 
 def wait_for_quiet(max_load: float, timeout_s: float, poll_s: float = 30.0) -> float:
-    """Block until the load average drops below max_load, or give up.
+    """Block until the system-load metric drops below max_load, or give up.
 
     Retrying on a high within-run CV (see run_cell_quality_gated) reacts to
     contention after paying for it. This refuses to start in the first place.
@@ -176,7 +189,7 @@ def wait_for_quiet(max_load: float, timeout_s: float, poll_s: float = 30.0) -> f
     processes involved. A sweep launched at the wrong moment produces numbers
     that look fine and are wrong by a factor of two.
 
-    Returns the load average it settled at. Never raises: on a host that is
+    Returns the load metric it settled at. Never raises: on a host that is
     permanently busy, measuring with a recorded and flagged load beats not
     measuring at all, so this warns and proceeds.
     """
@@ -354,9 +367,10 @@ def main(argv=None) -> int:
     ap.add_argument("--cv-retries", type=int, default=2,
                     help="extra attempts allowed per cell before keeping the best")
     ap.add_argument("--max-load", type=float, default=None,
-                    help="wait for the 1-minute load average to fall below this "
-                         "before each cell. Defaults to 1.5x the thread count. "
-                         "Set 0 to disable.")
+                    help="wait for system load to fall below this before each "
+                         "cell (1-minute average on POSIX, busy logical CPUs on "
+                         "Windows). Defaults to 1.5x the thread count. Set 0 to "
+                         "disable.")
     ap.add_argument("--load-wait", type=float, default=900,
                     help="seconds to wait for a quiet window before measuring anyway")
     ap.add_argument("--only", type=str, default=None,
@@ -373,6 +387,19 @@ def main(argv=None) -> int:
     if not models:
         print(f"No .gguf files in {args.models_dir}. Run "
               f"`python -m llmperf.fetch --set pilot` first.", file=sys.stderr)
+        return 2
+
+    try:
+        splits = load_model_splits(args.models_dir, RESULTS_DIR)
+    except ValueError as e:
+        print(f"Invalid train/test split provenance: {e}", file=sys.stderr)
+        return 2
+    missing_splits = sorted(m.name for m in models if m.name not in splits)
+    if missing_splits:
+        print("No fixed train/test split for: " + ", ".join(missing_splits) +
+              ". Run `python -m llmperf.fetch` to create the manifest before "
+              "measuring; unknown models are never assumed to be train.",
+              file=sys.stderr)
         return 2
 
     binary = find_llama_bench()
@@ -470,7 +497,7 @@ def main(argv=None) -> int:
                 "host": host_id(), "platform": platform_tag(), "git_commit": commit,
                 "llama_bench_version": version,
                 "model_file": model.name, "model_name": mm.name, "quant": mm.quant,
-                "arch": mm.arch, "split": "",
+                "arch": mm.arch, "split": splits[model.name],
                 "file_bytes": mm.file_bytes, "n_params": mm.n_params,
                 "n_active_params": mm.n_active_params, "n_layers": mm.n_layers,
                 "n_kv_heads": mm.n_kv_heads, "head_dim": mm.head_dim,
@@ -570,6 +597,9 @@ def _selfcheck() -> None:
     # CSV round-trips everything as strings; the key must survive that.
     as_str = {k: str(v) for k, v in written[1].items()}
     assert cell_key(as_str) == cell_key(written[1]), "key must be str/int agnostic"
+
+    load = load_average()
+    assert math.isfinite(load) and load >= 0, f"load metric unavailable: {load}"
 
     print("sweep.py selfcheck ok")
 
