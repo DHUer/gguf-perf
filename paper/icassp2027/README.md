@@ -24,7 +24,7 @@ blocker in the current build.
 
 ## Data represented in the paper
 
-- 216 selected rows: 132 M4 Max and 84 RTX 5080
+- 216 selected rows: 132 from the 64-GB MacBook Pro M4 Max and 84 from RTX 5080
 - 99 scored decode and 99 scored prefill rows
 - 33 scored host--file configurations representing 21 unique GGUF files
 - RTX cohort: 14 measured/scored files, split 12 train and two held out

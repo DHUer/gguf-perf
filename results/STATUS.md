@@ -5,7 +5,7 @@ supersedes the earlier Mac-only status and RTX download checkpoints.
 
 ## Coverage
 
-| | M4 Max (`lun-mac`) | RTX 5080 (`rtx5080`) | Combined |
+| | MacBook M4 Max (`lun-mac`) | RTX 5080 (`rtx5080`) | Combined |
 |---|---:|---:|---:|
 | measured files | 22 | 14 | 36 host--file configurations |
 | selected successful rows | 132 | 84 | **216** |
@@ -47,7 +47,7 @@ The B2 median-ratio leave-one-host-out evaluation gives:
 
 | Held-out host | Rows | MAPE | Median APE | Maximum APE |
 |---|---:|---:|---:|---:|
-| M4 Max | 57 | 20.82% | 15.41% | 75.81% |
+| MacBook M4 Max | 57 | 20.82% | 15.41% | 75.81% |
 | RTX 5080 | 42 | 21.69% | 18.75% | 71.53% |
 
 For context, target-fitted B2 has all-row MAPE of 10.96% on Mac and 13.84% on
@@ -58,7 +58,7 @@ Restricted to each target's fixed test rows:
 
 | Target host | Test rows | Transferred MAPE | Median APE | Target-fitted MAPE |
 |---|---:|---:|---:|---:|
-| M4 Max | 12 | 13.94% | 8.63% | 13.11% |
+| MacBook M4 Max | 12 | 13.94% | 8.63% | 13.11% |
 | RTX 5080 | 6 | 36.70% | 26.18% | 36.15% |
 
 The transferred and target-fitted errors are close on this narrow test, so the

@@ -109,7 +109,9 @@ def fig_accuracy(dec, pred, out: Path) -> str:
     fig, axes = plt.subplots(1, len(hosts), figsize=(WIDE, 3.35),
                              sharex=True, sharey=True, squeeze=False)
     axes = axes.ravel()
-    host_names = {"lun-mac": "Apple M4 Max", "rtx5080": "RTX 5080"}
+    host_names = {"lun-mac": "MacBook M4 Max",
+                  "mac-studio-m4-max": "Mac Studio M4 Max",
+                  "rtx5080": "RTX 5080"}
     groups = [
         ("train, dense", False, "train", "o", C[0], True),
         ("train, MoE", True, "train", "s", C[0], False),
@@ -232,7 +234,9 @@ def fig_mechanisms(dec, preds, out: Path) -> str:
     # give the larger Mac cohort twice the weight of RTX and hide the latter's
     # substantially higher error.
     hosts = sorted(d.loc[held, "host"].unique())
-    host_names = {"lun-mac": "Apple M4 Max", "rtx5080": "RTX 5080"}
+    host_names = {"lun-mac": "MacBook M4 Max",
+                  "mac-studio-m4-max": "Mac Studio M4 Max",
+                  "rtx5080": "RTX 5080"}
     names = list(pred_arrays)
     pretty = {
         "B0 uncalibrated": "B0",
@@ -490,7 +494,9 @@ def fig_eta(dec, out: Path) -> str:
     ax.set_ylabel(r"$\eta$  (fraction of memory roofline)")
     ax.grid(axis="x", visible=False)
     ax.set_axisbelow(True)
-    host_names = {"lun-mac": "Apple M4 Max", "rtx5080": "RTX 5080"}
+    host_names = {"lun-mac": "MacBook M4 Max",
+                  "mac-studio-m4-max": "Mac Studio M4 Max",
+                  "rtx5080": "RTX 5080"}
     handles = [Line2D([], [], color=host_colours[h], lw=1.4,
                       label=host_names.get(h, h)) for h in hosts]
     handles += [
@@ -529,7 +535,9 @@ def fig_context(dec, out: Path) -> str:
     ax.set_xlabel("KV-cache depth (tokens)")
     ax.set_ylabel("throughput relative to empty cache")
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
-    host_names = {"lun-mac": "Apple M4 Max", "rtx5080": "RTX 5080"}
+    host_names = {"lun-mac": "MacBook M4 Max",
+                  "mac-studio-m4-max": "Mac Studio M4 Max",
+                  "rtx5080": "RTX 5080"}
     handles = [Line2D([], [], color=host_colours[h], lw=1.4,
                       label=host_names.get(h, h)) for h in hosts]
     handles += [
@@ -575,7 +583,9 @@ def fig_quant_ladder(dec, out: Path) -> str:
 
     fig, ax = plt.subplots(figsize=(COL, COL * 0.82))
     hosts = sorted(g["host"].unique())
-    host_names = {"lun-mac": "Apple M4 Max", "rtx5080": "RTX 5080"}
+    host_names = {"lun-mac": "MacBook M4 Max",
+                  "mac-studio-m4-max": "Mac Studio M4 Max",
+                  "rtx5080": "RTX 5080"}
     for i, host in enumerate(hosts):
         hg = g[g["host"] == host].sort_values("bits")
         ax.plot(hg["bits"], hg["eta"], "-o", color=C[i % len(C)],
@@ -643,7 +653,9 @@ def fig_scope(all_rows, out: Path) -> str:
     ax1.axhline(1.0, color=MUTED, lw=0.8, ls="--", zorder=1)
     ax1.text(-0.35, 1.015, r"$T_dD/B_h=1$", ha="left", va="bottom",
              fontsize=9, color=INK2)
-    host_names = {"lun-mac": "Apple M4 Max", "rtx5080": "RTX 5080"}
+    host_names = {"lun-mac": "MacBook M4 Max",
+                  "mac-studio-m4-max": "Mac Studio M4 Max",
+                  "rtx5080": "RTX 5080"}
     for i, host in enumerate(sorted(ladder["host"].unique())):
         hg = (ladder[ladder["host"] == host].set_index("quant")
               .reindex(quant_order))
@@ -774,7 +786,11 @@ def fig_quality_vs_error(dec, pred, all_rows, out: Path) -> str:
 
     fig, (ax, ax2) = plt.subplots(
         1, 2, figsize=(WIDE, 2.72), gridspec_kw={"width_ratios": [1.08, 0.92]})
-    host_names = {"lun-mac": "Apple M4 Max", "rtx5080": "RTX 5080"}
+    host_names = {"lun-mac": "MacBook M4 Max",
+                  "mac-studio-m4-max": "Mac Studio M4 Max",
+                  "rtx5080": "RTX 5080"}
+    short_names = {"lun-mac": "MB", "mac-studio-m4-max": "MS",
+                   "rtx5080": "RTX"}
     host_colours = {h: C[i % len(C)] for i, h in enumerate(sorted(d["host"].unique()))}
     for host in sorted(d["host"].unique()):
         for split, marker in (("train", "o"), ("test", "^")):
@@ -785,7 +801,7 @@ def fig_quality_vs_error(dec, pred, all_rows, out: Path) -> str:
                                        else host_colours[host]),
                            edgecolors=host_colours[host],
                            linewidths=0.9,
-                           label=f"{'M4' if host == 'lun-mac' else 'RTX'} {split}",
+                           label=f"{short_names.get(host, host)} {split}",
                            zorder=3)
     ax.axvline(3.0, color=INK2, ls=":", lw=0.9, zorder=2)
     r = d[["cv", "ape"]].corr(method="spearman").iloc[0, 1]
@@ -808,7 +824,7 @@ def fig_quality_vs_error(dec, pred, all_rows, out: Path) -> str:
             ].to_numpy(float)
             if len(values):
                 groups.append(values)
-                short_host = "M4" if host == "lun-mac" else "RTX"
+                short_host = short_names.get(host, host)
                 short_phase = "D" if phase == "decode" else "P"
                 labels.append(f"{short_host} {short_phase}")
                 colours.append(colour)

@@ -24,7 +24,7 @@ All exported rows carry the declared protocol fields. The retry decision, howeve
 \toprule
 Host & Backend & Train cfg. & Test cfg. & Scored decode & Scored prefill\\
 \midrule
-Apple M4 Max & BLAS,MTL & 15 & 4 & 57 & 57 \\
+MacBook M4 Max & BLAS,MTL & 15 & 4 & 57 & 57 \\
 RTX 5080 & CUDA & 12 & 2 & 42 & 42 \\
 \bottomrule
 \end{tabular}
@@ -35,12 +35,12 @@ RTX 5080 & CUDA & 12 & 2 & 42 & 42 \\
 \toprule
 Host & Retried cells & Gate CV med. & Gate CV max & PP CV med. & PP CV max & PP $>3\%$\\
 \midrule
-Apple M4 Max & 3 & 1.43 & 3.04 & 1.41 & 4.84 & 7/57 \\
+MacBook M4 Max & 3 & 1.43 & 3.04 & 1.41 & 4.84 & 7/57 \\
 RTX 5080 & 3 & 0.88 & 1.65 & 3.56 & 39.19 & 29/42 \\
 \bottomrule
 \end{tabular}
 \end{center}
-Attempted configurations with no successful row are Apple M4 Max: \nolinkurl{gpt-oss-120b-MXFP4.gguf}. On Apple M4 Max, two raw attempts of the one gpt-oss-120B configuration report \texttt{failed to decode prompt batch, res=-3}; these are prompt-batch failures, not demonstrated model-load or out-of-memory failures. Host-specific calibration probes are Apple M4 Max: \nolinkurl{Qwen3.8-27B-Q8_0.gguf}, \nolinkurl{Qwen3.5-9B-Q8_0.gguf}, \nolinkurl{Qwen3.5-4B-Q8_0.gguf}; RTX 5080: none.
+Attempted configurations with no successful row are MacBook M4 Max: \nolinkurl{gpt-oss-120b-MXFP4.gguf}. On the MacBook Pro M4 Max, two raw attempts of the one gpt-oss-120B configuration report \texttt{failed to decode prompt batch, res=-3}; these are prompt-batch failures, not demonstrated model-load or out-of-memory failures. Host-specific calibration probes are MacBook M4 Max: \nolinkurl{Qwen3.8-27B-Q8_0.gguf}, \nolinkurl{Qwen3.5-9B-Q8_0.gguf}, \nolinkurl{Qwen3.5-4B-Q8_0.gguf}; RTX 5080: none.
 \subsection{Cohort accounting}
 Raw records, superseded legacy rows, repeated protocol attempts, selected observations, and scoring exclusions are separated below. A protocol duplicate is a successful protocol row removed by the atomic host--model--phase--depth selector; it is not an additional scored observation.
 \begin{center}
@@ -50,7 +50,7 @@ Raw records, superseded legacy rows, repeated protocol attempts, selected observ
 \toprule
 Host & Raw & Failed & Legacy ok & Protocol ok & Dup. removed & Selected & Probes & Scored\\
 \midrule
-Apple M4 Max & 278 & 2 & 132 & 144 & 12 & 132 & 18 & 114 \\
+MacBook M4 Max & 278 & 2 & 132 & 144 & 12 & 132 & 18 & 114 \\
 RTX 5080 & 84 & 0 & 0 & 84 & 0 & 84 & 0 & 84 \\
 \bottomrule
 \end{tabular}
@@ -77,24 +77,24 @@ Host & ID & Phase & Depth & Measured & SD & CV \% & Attempts \\
 \endfoot
 \bottomrule
 \endlastfoot
-Apple M4 Max & M09 & decode & 0 & 77.275 & 0.201 & 0.260 & 1 \\
-Apple M4 Max & M09 & decode & 4,096 & 74.687 & 0.153 & 0.204 & 1 \\
-Apple M4 Max & M09 & decode & 16,384 & 67.270 & 0.341 & 0.507 & 1 \\
-Apple M4 Max & M09 & prefill & 0 & 1553.086 & 1.682 & 0.108 & 1 \\
-Apple M4 Max & M09 & prefill & 4,096 & 1416.098 & 1.799 & 0.127 & 1 \\
-Apple M4 Max & M09 & prefill & 16,384 & 992.403 & 10.398 & 1.048 & 1 \\
-Apple M4 Max & M11 & decode & 0 & 46.499 & 0.380 & 0.818 & 2 \\
-Apple M4 Max & M11 & decode & 4,096 & 45.340 & 0.169 & 0.372 & 2 \\
-Apple M4 Max & M11 & decode & 16,384 & 42.119 & 0.938 & 2.226 & 2 \\
-Apple M4 Max & M11 & prefill & 0 & 865.397 & 0.661 & 0.076 & 2 \\
-Apple M4 Max & M11 & prefill & 4,096 & 784.470 & 4.299 & 0.548 & 2 \\
-Apple M4 Max & M11 & prefill & 16,384 & 560.769 & 14.295 & 2.549 & 2 \\
-Apple M4 Max & M13 & decode & 0 & 14.902 & 0.054 & 0.365 & 1 \\
-Apple M4 Max & M13 & decode & 4,096 & 14.433 & 0.017 & 0.118 & 1 \\
-Apple M4 Max & M13 & decode & 16,384 & 13.575 & 0.092 & 0.680 & 1 \\
-Apple M4 Max & M13 & prefill & 0 & 238.511 & 7.257 & 3.043 & 1 \\
-Apple M4 Max & M13 & prefill & 4,096 & 201.115 & 2.027 & 1.008 & 1 \\
-Apple M4 Max & M13 & prefill & 16,384 & 161.599 & 1.227 & 0.759 & 1 \\
+MacBook M4 Max & M09 & decode & 0 & 77.275 & 0.201 & 0.260 & 1 \\
+MacBook M4 Max & M09 & decode & 4,096 & 74.687 & 0.153 & 0.204 & 1 \\
+MacBook M4 Max & M09 & decode & 16,384 & 67.270 & 0.341 & 0.507 & 1 \\
+MacBook M4 Max & M09 & prefill & 0 & 1553.086 & 1.682 & 0.108 & 1 \\
+MacBook M4 Max & M09 & prefill & 4,096 & 1416.098 & 1.799 & 0.127 & 1 \\
+MacBook M4 Max & M09 & prefill & 16,384 & 992.403 & 10.398 & 1.048 & 1 \\
+MacBook M4 Max & M11 & decode & 0 & 46.499 & 0.380 & 0.818 & 2 \\
+MacBook M4 Max & M11 & decode & 4,096 & 45.340 & 0.169 & 0.372 & 2 \\
+MacBook M4 Max & M11 & decode & 16,384 & 42.119 & 0.938 & 2.226 & 2 \\
+MacBook M4 Max & M11 & prefill & 0 & 865.397 & 0.661 & 0.076 & 2 \\
+MacBook M4 Max & M11 & prefill & 4,096 & 784.470 & 4.299 & 0.548 & 2 \\
+MacBook M4 Max & M11 & prefill & 16,384 & 560.769 & 14.295 & 2.549 & 2 \\
+MacBook M4 Max & M13 & decode & 0 & 14.902 & 0.054 & 0.365 & 1 \\
+MacBook M4 Max & M13 & decode & 4,096 & 14.433 & 0.017 & 0.118 & 1 \\
+MacBook M4 Max & M13 & decode & 16,384 & 13.575 & 0.092 & 0.680 & 1 \\
+MacBook M4 Max & M13 & prefill & 0 & 238.511 & 7.257 & 3.043 & 1 \\
+MacBook M4 Max & M13 & prefill & 4,096 & 201.115 & 2.027 & 1.008 & 1 \\
+MacBook M4 Max & M13 & prefill & 16,384 & 161.599 & 1.227 & 0.759 & 1 \\
 \end{longtable}
 \endgroup
 \paragraph{Probe-exclusion sensitivity.}
@@ -107,12 +107,12 @@ Results are separated by host because fitted efficiency factors are host-specifi
 \toprule
 Host & Predictor & Split & $n$ & MAPE (\%) & Median (\%) & P90 / max (\%)\\
 \midrule
-Apple M4 Max & B0 unfitted (eta=1, total) & train & 45 & 33.57 & 19.37 & 76.47 / 123.27 \\
-Apple M4 Max & B0 unfitted (eta=1, total) & test & 12 & 46.89 & 49.97 & 83.45 / 84.22 \\
-Apple M4 Max & B1 fitted, total params & train & 45 & 15.80 & 3.20 & 70.29 / 76.77 \\
-Apple M4 Max & B1 fitted, total params & test & 12 & 49.36 & 54.66 & 81.90 / 82.74 \\
-Apple M4 Max & B2 fitted, active params (ours) & train & 45 & 10.39 & 2.12 & 26.32 / 78.49 \\
-Apple M4 Max & B2 fitted, active params (ours) & test & 12 & 13.11 & 8.98 & 36.65 / 49.92 \\
+MacBook M4 Max & B0 unfitted (eta=1, total) & train & 45 & 33.57 & 19.37 & 76.47 / 123.27 \\
+MacBook M4 Max & B0 unfitted (eta=1, total) & test & 12 & 46.89 & 49.97 & 83.45 / 84.22 \\
+MacBook M4 Max & B1 fitted, total params & train & 45 & 15.80 & 3.20 & 70.29 / 76.77 \\
+MacBook M4 Max & B1 fitted, total params & test & 12 & 49.36 & 54.66 & 81.90 / 82.74 \\
+MacBook M4 Max & B2 fitted, active params (ours) & train & 45 & 10.39 & 2.12 & 26.32 / 78.49 \\
+MacBook M4 Max & B2 fitted, active params (ours) & test & 12 & 13.11 & 8.98 & 36.65 / 49.92 \\
 RTX 5080 & B0 unfitted (eta=1, total) & train & 36 & 20.27 & 14.47 & 44.15 / 71.19 \\
 RTX 5080 & B0 unfitted (eta=1, total) & test & 6 & 41.65 & 40.39 & 81.22 / 81.95 \\
 RTX 5080 & B1 fitted, total params & train & 36 & 9.85 & 8.88 & 20.95 / 31.73 \\
@@ -120,10 +120,10 @@ RTX 5080 & B1 fitted, total params & test & 6 & 51.85 & 50.81 & 84.50 / 85.11 \\
 RTX 5080 & B2 fitted, active params (ours) & train & 36 & 10.12 & 9.34 & 20.95 / 31.73 \\
 RTX 5080 & B2 fitted, active params (ours) & test & 6 & 36.15 & 25.79 & 62.41 / 68.96 \\
 \midrule
-Apple M4 Max & P1 eta\_p per host & train & 15 & 6.81 & 5.36 & 16.58 / 33.40 \\
-Apple M4 Max & P1 eta\_p per host & test & 4 & 22.68 & 19.16 & 44.95 / 51.25 \\
-Apple M4 Max & P2 eta\_p per host x quant & train & 15 & 4.13 & 0.00 & 15.06 / 25.99 \\
-Apple M4 Max & P2 eta\_p per host x quant & test & 4 & 18.68 & 14.90 & 36.90 / 42.85 \\
+MacBook M4 Max & P1 eta\_p per host & train & 15 & 6.81 & 5.36 & 16.58 / 33.40 \\
+MacBook M4 Max & P1 eta\_p per host & test & 4 & 22.68 & 19.16 & 44.95 / 51.25 \\
+MacBook M4 Max & P2 eta\_p per host x quant & train & 15 & 4.13 & 0.00 & 15.06 / 25.99 \\
+MacBook M4 Max & P2 eta\_p per host x quant & test & 4 & 18.68 & 14.90 & 36.90 / 42.85 \\
 RTX 5080 & P1 eta\_p per host & train & 12 & 14.46 & 9.15 & 31.38 / 52.16 \\
 RTX 5080 & P1 eta\_p per host & test & 2 & 124.51 & 124.51 & 207.24 / 227.93 \\
 RTX 5080 & P2 eta\_p per host x quant & train & 12 & 5.86 & 0.00 & 21.31 / 25.36 \\
@@ -140,11 +140,11 @@ B2 transfers the source host's median per-quantization coefficients and substitu
 \toprule
 Variant & Target host & Source $n$ & Target $n$ & MAPE & Median & Max\\
 \midrule
-B2: all target rows & Apple M4 Max & 36 & 57 & 20.82 & 15.41 & 75.81 \\
+B2: all target rows & MacBook M4 Max & 36 & 57 & 20.82 & 15.41 & 75.81 \\
 B2: all target rows & RTX 5080 & 45 & 42 & 21.69 & 18.75 & 71.53 \\
-B2: target test rows & Apple M4 Max & 36 & 12 & 13.94 & 8.63 & 47.67 \\
+B2: target test rows & MacBook M4 Max & 36 & 12 & 13.94 & 8.63 & 47.67 \\
 B2: target test rows & RTX 5080 & 45 & 6 & 36.70 & 26.18 & 71.53 \\
-rejected two-term & Apple M4 Max & 36 & 57 & 57.06 & 54.22 & 78.57 \\
+rejected two-term & MacBook M4 Max & 36 & 57 & 57.06 & 54.22 & 78.57 \\
 rejected two-term & RTX 5080 & 45 & 42 & 116.85 & 98.66 & 349.25 \\
 \bottomrule
 \end{tabular}
@@ -156,10 +156,10 @@ For context, target-fitted B2 gives all-row MAPE of 10.96\% on Mac and 13.84\% o
 \toprule
 Host & Split & Architecture & $n$ & B0 & B1 & B2\\
 \midrule
-Apple M4 Max & train & dense & 36 & 23.21 & 7.14 & 5.66 \\
-Apple M4 Max & train & MoE & 9 & 74.98 & 50.45 & 29.29 \\
-Apple M4 Max & test & dense & 6 & 11.18 & 17.75 & 3.28 \\
-Apple M4 Max & test & MoE & 6 & 82.61 & 80.97 & 22.95 \\
+MacBook M4 Max & train & dense & 36 & 23.21 & 7.14 & 5.66 \\
+MacBook M4 Max & train & MoE & 9 & 74.98 & 50.45 & 29.29 \\
+MacBook M4 Max & test & dense & 6 & 11.18 & 17.75 & 3.28 \\
+MacBook M4 Max & test & MoE & 6 & 82.61 & 80.97 & 22.95 \\
 RTX 5080 & train & dense & 33 & 15.73 & 10.57 & 10.57 \\
 RTX 5080 & train & MoE & 3 & 70.28 & 1.95 & 5.18 \\
 RTX 5080 & test & dense & 3 & 3.54 & 20.40 & 20.40 \\
@@ -175,8 +175,8 @@ With each variant refit on training rows, replacing a uniform-global KV denomina
 \toprule
 Host & Split & $n$ & Uniform KV MAPE (\%) & Per-layer KV MAPE (\%)\\
 \midrule
-Apple M4 Max & train & 45 & 12.68 & 10.39 \\
-Apple M4 Max & test & 12 & 21.23 & 13.11 \\
+MacBook M4 Max & train & 45 & 12.68 & 10.39 \\
+MacBook M4 Max & test & 12 & 21.23 & 13.11 \\
 RTX 5080 & train & 36 & 12.37 & 10.12 \\
 RTX 5080 & test & 6 & 37.87 & 36.15 \\
 \bottomrule
@@ -190,9 +190,9 @@ All 33 scored host--file configurations slow monotonically from 0 through 16,384
 \toprule
 Host & Depth & Train $n$ & Test $n$ & Train B2 MAPE & Test B2 MAPE & Median normalized rate\\
 \midrule
-Apple M4 Max & 0 & 15 & 4 & 11.30 & 17.86 & 1.000 \\
-Apple M4 Max & 4,096 & 15 & 4 & 7.59 & 12.83 & 0.945 \\
-Apple M4 Max & 16,384 & 15 & 4 & 12.27 & 8.63 & 0.837 \\
+MacBook M4 Max & 0 & 15 & 4 & 11.30 & 17.86 & 1.000 \\
+MacBook M4 Max & 4,096 & 15 & 4 & 7.59 & 12.83 & 0.945 \\
+MacBook M4 Max & 16,384 & 15 & 4 & 12.27 & 8.63 & 0.837 \\
 RTX 5080 & 0 & 12 & 2 & 10.19 & 44.52 & 1.000 \\
 RTX 5080 & 4,096 & 12 & 2 & 4.49 & 38.28 & 0.985 \\
 RTX 5080 & 16,384 & 12 & 2 & 15.67 & 25.64 & 0.922 \\
@@ -207,12 +207,12 @@ Depth 0 is the primary prefill fit and score. The same fitted coefficients are a
 \toprule
 Host & Split & Depth & $n$ & P1 MAPE & P2 MAPE & P2 median & P2 max\\
 \midrule
-Apple M4 Max & train & 0 & 15 & 6.81 & 4.13 & 0.00 & 25.99 \\
-Apple M4 Max & train & 4,096 & 15 & 22.35 & 20.83 & 17.58 & 49.82 \\
-Apple M4 Max & train & 16,384 & 15 & 66.94 & 64.13 & 51.02 & 150.97 \\
-Apple M4 Max & test & 0 & 4 & 22.68 & 18.68 & 14.90 & 42.85 \\
-Apple M4 Max & test & 4,096 & 4 & 40.98 & 33.11 & 29.60 & 55.36 \\
-Apple M4 Max & test & 16,384 & 4 & 86.59 & 76.18 & 73.78 & 132.42 \\
+MacBook M4 Max & train & 0 & 15 & 6.81 & 4.13 & 0.00 & 25.99 \\
+MacBook M4 Max & train & 4,096 & 15 & 22.35 & 20.83 & 17.58 & 49.82 \\
+MacBook M4 Max & train & 16,384 & 15 & 66.94 & 64.13 & 51.02 & 150.97 \\
+MacBook M4 Max & test & 0 & 4 & 22.68 & 18.68 & 14.90 & 42.85 \\
+MacBook M4 Max & test & 4,096 & 4 & 40.98 & 33.11 & 29.60 & 55.36 \\
+MacBook M4 Max & test & 16,384 & 4 & 86.59 & 76.18 & 73.78 & 132.42 \\
 RTX 5080 & train & 0 & 12 & 14.46 & 5.86 & 0.00 & 25.36 \\
 RTX 5080 & train & 4,096 & 12 & 19.26 & 12.35 & 8.23 & 32.74 \\
 RTX 5080 & train & 16,384 & 12 & 36.13 & 28.56 & 18.19 & 72.26 \\
@@ -235,12 +235,12 @@ Tables~\ref{tab:model-id} and~\ref{tab:model-geometry} jointly reproduce every f
 \setlength{\tabcolsep}{3.5pt}
 \renewcommand{\arraystretch}{1.08}
 \begin{longtable}{@{}l l L{0.75in} L{2.7in} L{2.45in} L{0.9in} l r@{}}
-\caption{Selected model identity, source, and file size. Sizes are exact bytes; host codes are M4 (Apple M4 Max) and RTX (RTX 5080), and ``probe only'' denotes a file excluded from every prediction fit and score.}\label{tab:model-id}\\
+\caption{Selected model identity, source, and file size. Sizes are exact bytes; host codes are MB (MacBook M4 Max) and RTX (RTX 5080), and ``probe only'' denotes a file excluded from every prediction fit and score.}\label{tab:model-id}\\
 \toprule
 ID & Split & Scored host(s) & GGUF filename & Repository & Architecture & Quant. & Bytes \\
 \midrule
 \endfirsthead
-\caption[]{Selected model identity, source, and file size. Sizes are exact bytes; host codes are M4 (Apple M4 Max) and RTX (RTX 5080), and ``probe only'' denotes a file excluded from every prediction fit and score. (continued)}\\
+\caption[]{Selected model identity, source, and file size. Sizes are exact bytes; host codes are MB (MacBook M4 Max) and RTX (RTX 5080), and ``probe only'' denotes a file excluded from every prediction fit and score. (continued)}\\
 \toprule
 ID & Split & Scored host(s) & GGUF filename & Repository & Architecture & Quant. & Bytes \\
 \midrule
@@ -250,28 +250,28 @@ ID & Split & Scored host(s) & GGUF filename & Repository & Architecture & Quant.
 \endfoot
 \bottomrule
 \endlastfoot
-M01 & train & M4, RTX & \nolinkurl{gemma-4-12b-it-qat-q4_0.gguf} & \nolinkurl{google/gemma-4-12B-it-qat-q4_0-gguf} & gemma4 & Q4\_0 & 6,975,879,296 \\
-M02 & train & M4 & \nolinkurl{gemma-4-26B-A4B-it-UD-Q4_K_M.gguf} & \nolinkurl{unsloth/gemma-4-26B-A4B-it-GGUF} & gemma4 & Q4\_K\_M & 16,947,541,728 \\
-M03 & train & M4, RTX & \nolinkurl{gpt-oss-20b-MXFP4.gguf} & \nolinkurl{ggml-org/gpt-oss-20b-GGUF} & gpt-oss & MXFP4 & 12,109,566,624 \\
-M04 & test & M4, RTX & \nolinkurl{inclusionAI_Ling-mini-2.0-Q4_K_M.gguf} & \nolinkurl{bartowski/inclusionAI_Ling-mini-2.0-GGUF} & bailingmoe2 & Q4\_K\_M & 9,941,894,336 \\
-M05 & test & M4 & \nolinkurl{Muse-Glimmer-30B-UD-Q4_K_XL.gguf} & \nolinkurl{unsloth/Muse-Glimmer-30B-GGUF} & muse-glimmer & Q4\_K & 15,878,222,368 \\
-M06 & test & M4 & \nolinkurl{Nemotron-3-Nano-30B-A3B-Q4_K_M.gguf} & \nolinkurl{unsloth/Nemotron-3-Nano-30B-A3B-GGUF} & nemotron\_h\_moe & Q4\_K\_M & 24,574,373,664 \\
-M07 & test & M4, RTX & \nolinkurl{NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf} & \nolinkurl{lmstudio-community/NVIDIA-Nemotron-3-Nano-4B-GGUF} & nemotron\_h & Q4\_K\_M & 2,837,072,896 \\
-M08 & train & M4, RTX & \nolinkurl{Qwen3.5-4B-Q4_K_M.gguf} & \nolinkurl{unsloth/Qwen3.5-4B-GGUF} & qwen35 & Q4\_K\_M & 2,740,937,888 \\
+M01 & train & MB, RTX & \nolinkurl{gemma-4-12b-it-qat-q4_0.gguf} & \nolinkurl{google/gemma-4-12B-it-qat-q4_0-gguf} & gemma4 & Q4\_0 & 6,975,879,296 \\
+M02 & train & MB & \nolinkurl{gemma-4-26B-A4B-it-UD-Q4_K_M.gguf} & \nolinkurl{unsloth/gemma-4-26B-A4B-it-GGUF} & gemma4 & Q4\_K\_M & 16,947,541,728 \\
+M03 & train & MB, RTX & \nolinkurl{gpt-oss-20b-MXFP4.gguf} & \nolinkurl{ggml-org/gpt-oss-20b-GGUF} & gpt-oss & MXFP4 & 12,109,566,624 \\
+M04 & test & MB, RTX & \nolinkurl{inclusionAI_Ling-mini-2.0-Q4_K_M.gguf} & \nolinkurl{bartowski/inclusionAI_Ling-mini-2.0-GGUF} & bailingmoe2 & Q4\_K\_M & 9,941,894,336 \\
+M05 & test & MB & \nolinkurl{Muse-Glimmer-30B-UD-Q4_K_XL.gguf} & \nolinkurl{unsloth/Muse-Glimmer-30B-GGUF} & muse-glimmer & Q4\_K & 15,878,222,368 \\
+M06 & test & MB & \nolinkurl{Nemotron-3-Nano-30B-A3B-Q4_K_M.gguf} & \nolinkurl{unsloth/Nemotron-3-Nano-30B-A3B-GGUF} & nemotron\_h\_moe & Q4\_K\_M & 24,574,373,664 \\
+M07 & test & MB, RTX & \nolinkurl{NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf} & \nolinkurl{lmstudio-community/NVIDIA-Nemotron-3-Nano-4B-GGUF} & nemotron\_h & Q4\_K\_M & 2,837,072,896 \\
+M08 & train & MB, RTX & \nolinkurl{Qwen3.5-4B-Q4_K_M.gguf} & \nolinkurl{unsloth/Qwen3.5-4B-GGUF} & qwen35 & Q4\_K\_M & 2,740,937,888 \\
 M09 & train & RTX & \nolinkurl{Qwen3.5-4B-Q8_0.gguf} & \nolinkurl{unsloth/Qwen3.5-4B-GGUF} & qwen35 & Q8\_0 & 4,482,403,488 \\
-M10 & train & M4, RTX & \nolinkurl{Qwen3.5-9B-Q4_K_M.gguf} & \nolinkurl{unsloth/Qwen3.5-9B-GGUF} & qwen35 & Q4\_K\_M & 5,680,522,464 \\
+M10 & train & MB, RTX & \nolinkurl{Qwen3.5-9B-Q4_K_M.gguf} & \nolinkurl{unsloth/Qwen3.5-9B-GGUF} & qwen35 & Q4\_K\_M & 5,680,522,464 \\
 M11 & train & RTX & \nolinkurl{Qwen3.5-9B-Q8_0.gguf} & \nolinkurl{unsloth/Qwen3.5-9B-GGUF} & qwen35 & Q8\_0 & 9,527,502,048 \\
-M12 & train & M4 & \nolinkurl{Qwen3.6-35B-A3B-UD-Q4_K_M.gguf} & \nolinkurl{unsloth/Qwen3.6-35B-A3B-GGUF} & qwen35moe & Q4\_K\_M & 22,134,528,992 \\
+M12 & train & MB & \nolinkurl{Qwen3.6-35B-A3B-UD-Q4_K_M.gguf} & \nolinkurl{unsloth/Qwen3.6-35B-A3B-GGUF} & qwen35moe & Q4\_K\_M & 22,134,528,992 \\
 M13 & probe only & -- & \nolinkurl{Qwen3.8-27B-Q8_0.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q8\_0 & 29,047,086,048 \\
-M14 & train & M4, RTX & \nolinkurl{Qwen3.8-27B-UD-IQ2_XXS.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & IQ2\_XXS & 7,266,070,528 \\
-M15 & train & M4, RTX & \nolinkurl{Qwen3.8-27B-UD-IQ3_XXS.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & IQ3\_XXS & 10,934,860,704 \\
-M16 & train & M4, RTX & \nolinkurl{Qwen3.8-27B-UD-Q2_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q2\_K & 9,828,981,664 \\
-M17 & train & M4, RTX & \nolinkurl{Qwen3.8-27B-UD-Q3_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q3\_K & 13,146,393,504 \\
-M18 & train & M4 & \nolinkurl{Qwen3.8-27B-UD-Q4_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q4\_K & 17,559,178,144 \\
-M19 & train & M4 & \nolinkurl{Qwen3.8-27B-UD-Q5_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q5\_K & 20,876,938,144 \\
-M20 & train & M4 & \nolinkurl{Qwen3.8-27B-UD-Q6_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q6\_K & 25,299,061,664 \\
-M21 & train & M4, RTX & \nolinkurl{SmolLM3-Q4_K_M.gguf} & \nolinkurl{ggml-org/SmolLM3-3B-GGUF} & smollm3 & Q4\_K\_M & 1,915,305,312 \\
-M22 & train & M4, RTX & \nolinkurl{SmolLM3-Q8_0.gguf} & \nolinkurl{ggml-org/SmolLM3-3B-GGUF} & smollm3 & Q8\_0 & 3,275,574,624 \\
+M14 & train & MB, RTX & \nolinkurl{Qwen3.8-27B-UD-IQ2_XXS.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & IQ2\_XXS & 7,266,070,528 \\
+M15 & train & MB, RTX & \nolinkurl{Qwen3.8-27B-UD-IQ3_XXS.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & IQ3\_XXS & 10,934,860,704 \\
+M16 & train & MB, RTX & \nolinkurl{Qwen3.8-27B-UD-Q2_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q2\_K & 9,828,981,664 \\
+M17 & train & MB, RTX & \nolinkurl{Qwen3.8-27B-UD-Q3_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q3\_K & 13,146,393,504 \\
+M18 & train & MB & \nolinkurl{Qwen3.8-27B-UD-Q4_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q4\_K & 17,559,178,144 \\
+M19 & train & MB & \nolinkurl{Qwen3.8-27B-UD-Q5_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q5\_K & 20,876,938,144 \\
+M20 & train & MB & \nolinkurl{Qwen3.8-27B-UD-Q6_K_XL.gguf} & \nolinkurl{unsloth/Qwen3.8-27B-GGUF} & qwen35 & Q6\_K & 25,299,061,664 \\
+M21 & train & MB, RTX & \nolinkurl{SmolLM3-Q4_K_M.gguf} & \nolinkurl{ggml-org/SmolLM3-3B-GGUF} & smollm3 & Q4\_K\_M & 1,915,305,312 \\
+M22 & train & MB, RTX & \nolinkurl{SmolLM3-Q8_0.gguf} & \nolinkurl{ggml-org/SmolLM3-3B-GGUF} & smollm3 & Q8\_0 & 3,275,574,624 \\
 \end{longtable}
 \endgroup
 \end{landscape}
@@ -344,63 +344,63 @@ Host & ID & Split & Depth & Measured & B2 & APE \% & Row CV \% & Load & Attempts
 \endfoot
 \bottomrule
 \endlastfoot
-Apple M4 Max & M01 & train & 0 & 54.28 & 54.28 & 0.00 & 0.42 & 15.79 & 1 \\
-Apple M4 Max & M01 & train & 4,096 & 49.91 & 49.08 & 1.65 & 0.55 & 15.79 & 1 \\
-Apple M4 Max & M01 & train & 16,384 & 45.34 & 47.84 & 5.50 & 1.54 & 15.79 & 1 \\
-Apple M4 Max & M02 & train & 0 & 89.15 & 124.01 & 39.11 & 0.15 & 16.58 & 1 \\
-Apple M4 Max & M02 & train & 4,096 & 82.91 & 103.69 & 25.07 & 0.42 & 16.58 & 1 \\
-Apple M4 Max & M02 & train & 16,384 & 75.37 & 95.83 & 27.15 & 0.44 & 16.58 & 1 \\
-Apple M4 Max & M03 & train & 0 & 124.28 & 128.17 & 3.13 & 0.29 & 11.83 & 1 \\
-Apple M4 Max & M03 & train & 4,096 & 118.34 & 118.34 & 0.00 & 0.19 & 11.83 & 1 \\
-Apple M4 Max & M03 & train & 16,384 & 102.83 & 96.21 & 6.43 & 0.67 & 11.83 & 1 \\
-Apple M4 Max & M08 & train & 0 & 101.64 & 116.16 & 14.29 & 0.16 & 8.19 & 1 \\
-Apple M4 Max & M08 & train & 4,096 & 97.13 & 97.13 & 0.00 & 0.28 & 8.19 & 1 \\
-Apple M4 Max & M08 & train & 16,384 & 85.05 & 65.13 & 23.42 & 1.25 & 8.19 & 1 \\
-Apple M4 Max & M10 & train & 0 & 66.64 & 56.05 & 15.90 & 1.00 & 8.30 & 1 \\
-Apple M4 Max & M10 & train & 4,096 & 62.95 & 51.21 & 18.65 & 1.81 & 8.30 & 1 \\
-Apple M4 Max & M10 & train & 16,384 & 56.62 & 40.67 & 28.17 & 2.81 & 8.30 & 1 \\
-Apple M4 Max & M12 & train & 0 & 80.85 & 144.30 & 78.49 & 0.29 & 15.62 & 1 \\
-Apple M4 Max & M12 & train & 4,096 & 78.38 & 125.26 & 59.81 & 0.24 & 15.62 & 1 \\
-Apple M4 Max & M12 & train & 16,384 & 72.10 & 89.72 & 24.44 & 1.12 & 15.62 & 1 \\
-Apple M4 Max & M14 & train & 0 & 23.56 & 23.56 & 0.00 & 1.20 & 16.52 & 1 \\
-Apple M4 Max & M14 & train & 4,096 & 20.41 & 20.53 & 0.59 & 2.70 & 16.52 & 1 \\
-Apple M4 Max & M14 & train & 16,384 & 19.71 & 14.81 & 24.88 & 1.72 & 16.52 & 1 \\
-Apple M4 Max & M15 & train & 0 & 23.49 & 24.42 & 3.94 & 1.09 & 14.84 & 1 \\
-Apple M4 Max & M15 & train & 4,096 & 22.20 & 22.20 & 0.00 & 1.59 & 14.84 & 1 \\
-Apple M4 Max & M15 & train & 16,384 & 19.63 & 17.45 & 11.07 & 1.65 & 14.84 & 1 \\
-Apple M4 Max & M16 & train & 0 & 24.08 & 25.71 & 6.75 & 1.90 & 11.04 & 1 \\
-Apple M4 Max & M16 & train & 4,096 & 23.14 & 23.14 & 0.00 & 2.39 & 11.04 & 1 \\
-Apple M4 Max & M16 & train & 16,384 & 21.30 & 17.81 & 16.41 & 1.65 & 11.04 & 1 \\
-Apple M4 Max & M17 & train & 0 & 22.80 & 23.29 & 2.12 & 2.60 & 11.42 & 3 \\
-Apple M4 Max & M17 & train & 4,096 & 21.89 & 21.50 & 1.75 & 0.91 & 11.42 & 3 \\
-Apple M4 Max & M17 & train & 16,384 & 17.49 & 17.49 & 0.00 & 2.94 & 11.42 & 3 \\
-Apple M4 Max & M18 & train & 0 & 20.50 & 20.92 & 2.05 & 2.11 & 13.06 & 3 \\
-Apple M4 Max & M18 & train & 4,096 & 19.70 & 19.70 & 0.00 & 1.97 & 13.06 & 3 \\
-Apple M4 Max & M18 & train & 16,384 & 16.77 & 16.76 & 0.10 & 1.47 & 13.06 & 3 \\
-Apple M4 Max & M19 & train & 0 & 18.88 & 19.13 & 1.31 & 1.57 & 17.66 & 1 \\
-Apple M4 Max & M19 & train & 4,096 & 18.33 & 18.18 & 0.83 & 2.21 & 17.66 & 1 \\
-Apple M4 Max & M19 & train & 16,384 & 15.82 & 15.82 & 0.00 & 2.67 & 17.66 & 1 \\
-Apple M4 Max & M20 & train & 0 & 16.86 & 16.86 & 0.00 & 0.37 & 17.18 & 1 \\
-Apple M4 Max & M20 & train & 4,096 & 15.92 & 16.16 & 1.50 & 1.42 & 17.18 & 1 \\
-Apple M4 Max & M20 & train & 16,384 & 14.97 & 14.38 & 3.96 & 0.92 & 17.18 & 1 \\
-Apple M4 Max & M21 & train & 0 & 169.50 & 166.23 & 1.93 & 0.46 & 13.91 & 1 \\
-Apple M4 Max & M21 & train & 4,096 & 149.47 & 143.59 & 3.93 & 0.31 & 13.91 & 1 \\
-Apple M4 Max & M21 & train & 16,384 & 115.22 & 101.94 & 11.53 & 0.40 & 13.91 & 1 \\
-Apple M4 Max & M22 & train & 0 & 118.87 & 119.53 & 0.55 & 0.40 & 13.92 & 1 \\
-Apple M4 Max & M22 & train & 4,096 & 109.44 & 109.44 & 0.00 & 0.41 & 13.92 & 1 \\
-Apple M4 Max & M22 & train & 16,384 & 88.22 & 87.32 & 1.01 & 1.00 & 13.92 & 1 \\
-Apple M4 Max & M04 & test & 0 & 242.33 & 363.29 & 49.92 & 1.24 & 11.64 & 1 \\
-Apple M4 Max & M04 & test & 4,096 & 219.67 & 304.92 & 38.81 & 0.84 & 11.64 & 1 \\
-Apple M4 Max & M04 & test & 16,384 & 175.60 & 205.75 & 17.17 & 0.37 & 11.64 & 1 \\
-Apple M4 Max & M05 & test & 0 & 26.23 & 23.14 & 11.81 & 1.92 & 8.93 & 3 \\
-Apple M4 Max & M05 & test & 4,096 & 23.30 & 22.82 & 2.05 & 2.13 & 8.93 & 3 \\
-Apple M4 Max & M05 & test & 16,384 & 22.55 & 21.93 & 2.74 & 3.03 & 8.93 & 3 \\
-Apple M4 Max & M06 & test & 0 & 92.12 & 100.00 & 8.55 & 0.30 & 10.01 & 1 \\
-Apple M4 Max & M06 & test & 4,096 & 90.68 & 99.21 & 9.41 & 0.49 & 10.01 & 1 \\
-Apple M4 Max & M06 & test & 16,384 & 85.16 & 96.93 & 13.83 & 0.68 & 10.01 & 1 \\
-Apple M4 Max & M07 & test & 0 & 93.29 & 92.19 & 1.18 & 0.30 & 8.78 & 1 \\
-Apple M4 Max & M07 & test & 4,096 & 91.41 & 90.44 & 1.07 & 0.10 & 8.78 & 1 \\
-Apple M4 Max & M07 & test & 16,384 & 84.86 & 85.55 & 0.80 & 0.42 & 8.78 & 1 \\
+MacBook M4 Max & M01 & train & 0 & 54.28 & 54.28 & 0.00 & 0.42 & 15.79 & 1 \\
+MacBook M4 Max & M01 & train & 4,096 & 49.91 & 49.08 & 1.65 & 0.55 & 15.79 & 1 \\
+MacBook M4 Max & M01 & train & 16,384 & 45.34 & 47.84 & 5.50 & 1.54 & 15.79 & 1 \\
+MacBook M4 Max & M02 & train & 0 & 89.15 & 124.01 & 39.11 & 0.15 & 16.58 & 1 \\
+MacBook M4 Max & M02 & train & 4,096 & 82.91 & 103.69 & 25.07 & 0.42 & 16.58 & 1 \\
+MacBook M4 Max & M02 & train & 16,384 & 75.37 & 95.83 & 27.15 & 0.44 & 16.58 & 1 \\
+MacBook M4 Max & M03 & train & 0 & 124.28 & 128.17 & 3.13 & 0.29 & 11.83 & 1 \\
+MacBook M4 Max & M03 & train & 4,096 & 118.34 & 118.34 & 0.00 & 0.19 & 11.83 & 1 \\
+MacBook M4 Max & M03 & train & 16,384 & 102.83 & 96.21 & 6.43 & 0.67 & 11.83 & 1 \\
+MacBook M4 Max & M08 & train & 0 & 101.64 & 116.16 & 14.29 & 0.16 & 8.19 & 1 \\
+MacBook M4 Max & M08 & train & 4,096 & 97.13 & 97.13 & 0.00 & 0.28 & 8.19 & 1 \\
+MacBook M4 Max & M08 & train & 16,384 & 85.05 & 65.13 & 23.42 & 1.25 & 8.19 & 1 \\
+MacBook M4 Max & M10 & train & 0 & 66.64 & 56.05 & 15.90 & 1.00 & 8.30 & 1 \\
+MacBook M4 Max & M10 & train & 4,096 & 62.95 & 51.21 & 18.65 & 1.81 & 8.30 & 1 \\
+MacBook M4 Max & M10 & train & 16,384 & 56.62 & 40.67 & 28.17 & 2.81 & 8.30 & 1 \\
+MacBook M4 Max & M12 & train & 0 & 80.85 & 144.30 & 78.49 & 0.29 & 15.62 & 1 \\
+MacBook M4 Max & M12 & train & 4,096 & 78.38 & 125.26 & 59.81 & 0.24 & 15.62 & 1 \\
+MacBook M4 Max & M12 & train & 16,384 & 72.10 & 89.72 & 24.44 & 1.12 & 15.62 & 1 \\
+MacBook M4 Max & M14 & train & 0 & 23.56 & 23.56 & 0.00 & 1.20 & 16.52 & 1 \\
+MacBook M4 Max & M14 & train & 4,096 & 20.41 & 20.53 & 0.59 & 2.70 & 16.52 & 1 \\
+MacBook M4 Max & M14 & train & 16,384 & 19.71 & 14.81 & 24.88 & 1.72 & 16.52 & 1 \\
+MacBook M4 Max & M15 & train & 0 & 23.49 & 24.42 & 3.94 & 1.09 & 14.84 & 1 \\
+MacBook M4 Max & M15 & train & 4,096 & 22.20 & 22.20 & 0.00 & 1.59 & 14.84 & 1 \\
+MacBook M4 Max & M15 & train & 16,384 & 19.63 & 17.45 & 11.07 & 1.65 & 14.84 & 1 \\
+MacBook M4 Max & M16 & train & 0 & 24.08 & 25.71 & 6.75 & 1.90 & 11.04 & 1 \\
+MacBook M4 Max & M16 & train & 4,096 & 23.14 & 23.14 & 0.00 & 2.39 & 11.04 & 1 \\
+MacBook M4 Max & M16 & train & 16,384 & 21.30 & 17.81 & 16.41 & 1.65 & 11.04 & 1 \\
+MacBook M4 Max & M17 & train & 0 & 22.80 & 23.29 & 2.12 & 2.60 & 11.42 & 3 \\
+MacBook M4 Max & M17 & train & 4,096 & 21.89 & 21.50 & 1.75 & 0.91 & 11.42 & 3 \\
+MacBook M4 Max & M17 & train & 16,384 & 17.49 & 17.49 & 0.00 & 2.94 & 11.42 & 3 \\
+MacBook M4 Max & M18 & train & 0 & 20.50 & 20.92 & 2.05 & 2.11 & 13.06 & 3 \\
+MacBook M4 Max & M18 & train & 4,096 & 19.70 & 19.70 & 0.00 & 1.97 & 13.06 & 3 \\
+MacBook M4 Max & M18 & train & 16,384 & 16.77 & 16.76 & 0.10 & 1.47 & 13.06 & 3 \\
+MacBook M4 Max & M19 & train & 0 & 18.88 & 19.13 & 1.31 & 1.57 & 17.66 & 1 \\
+MacBook M4 Max & M19 & train & 4,096 & 18.33 & 18.18 & 0.83 & 2.21 & 17.66 & 1 \\
+MacBook M4 Max & M19 & train & 16,384 & 15.82 & 15.82 & 0.00 & 2.67 & 17.66 & 1 \\
+MacBook M4 Max & M20 & train & 0 & 16.86 & 16.86 & 0.00 & 0.37 & 17.18 & 1 \\
+MacBook M4 Max & M20 & train & 4,096 & 15.92 & 16.16 & 1.50 & 1.42 & 17.18 & 1 \\
+MacBook M4 Max & M20 & train & 16,384 & 14.97 & 14.38 & 3.96 & 0.92 & 17.18 & 1 \\
+MacBook M4 Max & M21 & train & 0 & 169.50 & 166.23 & 1.93 & 0.46 & 13.91 & 1 \\
+MacBook M4 Max & M21 & train & 4,096 & 149.47 & 143.59 & 3.93 & 0.31 & 13.91 & 1 \\
+MacBook M4 Max & M21 & train & 16,384 & 115.22 & 101.94 & 11.53 & 0.40 & 13.91 & 1 \\
+MacBook M4 Max & M22 & train & 0 & 118.87 & 119.53 & 0.55 & 0.40 & 13.92 & 1 \\
+MacBook M4 Max & M22 & train & 4,096 & 109.44 & 109.44 & 0.00 & 0.41 & 13.92 & 1 \\
+MacBook M4 Max & M22 & train & 16,384 & 88.22 & 87.32 & 1.01 & 1.00 & 13.92 & 1 \\
+MacBook M4 Max & M04 & test & 0 & 242.33 & 363.29 & 49.92 & 1.24 & 11.64 & 1 \\
+MacBook M4 Max & M04 & test & 4,096 & 219.67 & 304.92 & 38.81 & 0.84 & 11.64 & 1 \\
+MacBook M4 Max & M04 & test & 16,384 & 175.60 & 205.75 & 17.17 & 0.37 & 11.64 & 1 \\
+MacBook M4 Max & M05 & test & 0 & 26.23 & 23.14 & 11.81 & 1.92 & 8.93 & 3 \\
+MacBook M4 Max & M05 & test & 4,096 & 23.30 & 22.82 & 2.05 & 2.13 & 8.93 & 3 \\
+MacBook M4 Max & M05 & test & 16,384 & 22.55 & 21.93 & 2.74 & 3.03 & 8.93 & 3 \\
+MacBook M4 Max & M06 & test & 0 & 92.12 & 100.00 & 8.55 & 0.30 & 10.01 & 1 \\
+MacBook M4 Max & M06 & test & 4,096 & 90.68 & 99.21 & 9.41 & 0.49 & 10.01 & 1 \\
+MacBook M4 Max & M06 & test & 16,384 & 85.16 & 96.93 & 13.83 & 0.68 & 10.01 & 1 \\
+MacBook M4 Max & M07 & test & 0 & 93.29 & 92.19 & 1.18 & 0.30 & 8.78 & 1 \\
+MacBook M4 Max & M07 & test & 4,096 & 91.41 & 90.44 & 1.07 & 0.10 & 8.78 & 1 \\
+MacBook M4 Max & M07 & test & 16,384 & 84.86 & 85.55 & 0.80 & 0.42 & 8.78 & 1 \\
 RTX 5080 & M01 & train & 0 & 98.27 & 104.03 & 5.86 & 0.31 & 3.58 & 1 \\
 RTX 5080 & M01 & train & 4,096 & 94.08 & 94.08 & 0.00 & 0.64 & 3.58 & 1 \\
 RTX 5080 & M01 & train & 16,384 & 92.53 & 91.68 & 0.91 & 0.45 & 3.58 & 1 \\
@@ -469,63 +469,63 @@ Host & ID & Split & Depth & Scope & Measured & P1 & P1 APE & P2 & P2 APE & Row C
 \endfoot
 \bottomrule
 \endlastfoot
-Apple M4 Max & M01 & train & 0 & \textbf{primary} & 589.73 & 547.32 & 7.19 & 589.73 & 0.00 & 0.05 \\
-Apple M4 Max & M01 & train & 4,096 & diagnostic & 491.90 & 547.32 & 11.27 & 589.73 & 19.89 & 1.01 \\
-Apple M4 Max & M01 & train & 16,384 & diagnostic & 382.76 & 547.32 & 42.99 & 589.73 & 54.07 & 3.47 \\
-Apple M4 Max & M02 & train & 0 & \textbf{primary} & 1418.29 & 1704.93 & 20.21 & 1610.29 & 13.54 & 0.38 \\
-Apple M4 Max & M02 & train & 4,096 & diagnostic & 1145.69 & 1704.93 & 48.81 & 1610.29 & 40.55 & 2.81 \\
-Apple M4 Max & M02 & train & 16,384 & diagnostic & 741.02 & 1704.93 & 130.08 & 1610.29 & 117.31 & 2.63 \\
-Apple M4 Max & M03 & train & 0 & \textbf{primary} & 1589.84 & 1556.35 & 2.11 & 1589.84 & 0.00 & 0.27 \\
-Apple M4 Max & M03 & train & 4,096 & diagnostic & 1372.89 & 1556.35 & 13.36 & 1589.84 & 15.80 & 2.79 \\
-Apple M4 Max & M03 & train & 16,384 & diagnostic & 848.96 & 1556.35 & 83.33 & 1589.84 & 87.27 & 0.72 \\
-Apple M4 Max & M08 & train & 0 & \textbf{primary} & 1463.56 & 1549.58 & 5.88 & 1463.56 & 0.00 & 0.07 \\
-Apple M4 Max & M08 & train & 4,096 & diagnostic & 1310.45 & 1549.58 & 18.25 & 1463.56 & 11.68 & 0.40 \\
-Apple M4 Max & M08 & train & 16,384 & diagnostic & 941.78 & 1549.58 & 64.54 & 1463.56 & 55.40 & 0.89 \\
-Apple M4 Max & M10 & train & 0 & \textbf{primary} & 819.16 & 727.86 & 11.14 & 687.46 & 16.08 & 0.13 \\
-Apple M4 Max & M10 & train & 4,096 & diagnostic & 727.07 & 727.86 & 0.11 & 687.46 & 5.45 & 0.39 \\
-Apple M4 Max & M10 & train & 16,384 & diagnostic & 564.60 & 727.86 & 28.92 & 687.46 & 21.76 & 1.59 \\
-Apple M4 Max & M12 & train & 0 & \textbf{primary} & 1414.02 & 1886.30 & 33.40 & 1781.59 & 25.99 & 0.67 \\
-Apple M4 Max & M12 & train & 4,096 & diagnostic & 1189.17 & 1886.30 & 58.62 & 1781.59 & 49.82 & 1.38 \\
-Apple M4 Max & M12 & train & 16,384 & diagnostic & 880.48 & 1886.30 & 114.24 & 1781.59 & 102.34 & 1.39 \\
-Apple M4 Max & M14 & train & 0 & \textbf{primary} & 239.52 & 242.31 & 1.17 & 239.52 & 0.00 & 2.73 \\
-Apple M4 Max & M14 & train & 4,096 & diagnostic & 196.04 & 242.31 & 23.60 & 239.52 & 22.18 & 0.31 \\
-Apple M4 Max & M14 & train & 16,384 & diagnostic & 158.60 & 242.31 & 52.78 & 239.52 & 51.02 & 1.33 \\
-Apple M4 Max & M15 & train & 0 & \textbf{primary} & 238.54 & 238.54 & 0.00 & 238.54 & 0.00 & 2.42 \\
-Apple M4 Max & M15 & train & 4,096 & diagnostic & 203.40 & 238.54 & 17.28 & 238.54 & 17.28 & 1.81 \\
-Apple M4 Max & M15 & train & 16,384 & diagnostic & 172.91 & 238.54 & 37.96 & 238.54 & 37.96 & 1.74 \\
-Apple M4 Max & M16 & train & 0 & \textbf{primary} & 235.14 & 238.54 & 1.45 & 235.14 & 0.00 & 1.72 \\
-Apple M4 Max & M16 & train & 4,096 & diagnostic & 207.61 & 238.54 & 14.90 & 235.14 & 13.26 & 2.63 \\
-Apple M4 Max & M16 & train & 16,384 & diagnostic & 180.12 & 238.54 & 32.43 & 235.14 & 30.54 & 1.42 \\
-Apple M4 Max & M17 & train & 0 & \textbf{primary} & 241.51 & 238.54 & 1.23 & 241.51 & 0.00 & 2.59 \\
-Apple M4 Max & M17 & train & 4,096 & diagnostic & 202.71 & 238.54 & 17.67 & 241.51 & 19.14 & 0.93 \\
-Apple M4 Max & M17 & train & 16,384 & diagnostic & 164.64 & 238.54 & 44.89 & 241.51 & 46.69 & 2.76 \\
-Apple M4 Max & M18 & train & 0 & \textbf{primary} & 224.91 & 238.54 & 6.06 & 224.91 & 0.00 & 3.91 \\
-Apple M4 Max & M18 & train & 4,096 & diagnostic & 191.29 & 238.54 & 24.70 & 224.91 & 17.58 & 0.80 \\
-Apple M4 Max & M18 & train & 16,384 & diagnostic & 162.37 & 238.54 & 46.91 & 224.91 & 38.52 & 2.61 \\
-Apple M4 Max & M19 & train & 0 & \textbf{primary} & 225.20 & 238.54 & 5.92 & 225.20 & 0.00 & 2.87 \\
-Apple M4 Max & M19 & train & 4,096 & diagnostic & 196.00 & 238.54 & 21.70 & 225.20 & 14.90 & 2.15 \\
-Apple M4 Max & M19 & train & 16,384 & diagnostic & 174.79 & 238.54 & 36.47 & 225.20 & 28.84 & 1.41 \\
-Apple M4 Max & M20 & train & 0 & \textbf{primary} & 239.03 & 238.54 & 0.20 & 239.03 & 0.00 & 2.54 \\
-Apple M4 Max & M20 & train & 4,096 & diagnostic & 208.07 & 238.54 & 14.64 & 239.03 & 14.88 & 2.22 \\
-Apple M4 Max & M20 & train & 16,384 & diagnostic & 181.38 & 238.54 & 31.52 & 239.03 & 31.78 & 1.35 \\
-Apple M4 Max & M21 & train & 0 & \textbf{primary} & 2135.94 & 2119.33 & 0.78 & 2001.68 & 6.29 & 0.04 \\
-Apple M4 Max & M21 & train & 4,096 & diagnostic & 1653.76 & 2119.33 & 28.15 & 2001.68 & 21.04 & 2.82 \\
-Apple M4 Max & M21 & train & 16,384 & diagnostic & 965.07 & 2119.33 & 119.60 & 2001.68 & 107.41 & 1.34 \\
-Apple M4 Max & M22 & train & 0 & \textbf{primary} & 2239.31 & 2119.33 & 5.36 & 2239.31 & 0.00 & 0.12 \\
-Apple M4 Max & M22 & train & 4,096 & diagnostic & 1735.34 & 2119.33 & 22.13 & 2239.31 & 29.04 & 0.12 \\
-Apple M4 Max & M22 & train & 16,384 & diagnostic & 892.27 & 2119.33 & 137.52 & 2239.31 & 150.97 & 1.34 \\
-Apple M4 Max & M04 & test & 0 & \textbf{primary} & 4208.20 & 4547.98 & 8.07 & 4295.53 & 2.08 & 0.42 \\
-Apple M4 Max & M04 & test & 4,096 & diagnostic & 3300.39 & 4547.98 & 37.80 & 4295.53 & 30.15 & 0.62 \\
-Apple M4 Max & M04 & test & 16,384 & diagnostic & 1848.16 & 4547.98 & 146.08 & 4295.53 & 132.42 & 1.94 \\
-Apple M4 Max & M05 & test & 0 & \textbf{primary} & 236.65 & 233.97 & 1.13 & 220.60 & 6.78 & 3.52 \\
-Apple M4 Max & M05 & test & 4,096 & diagnostic & 187.15 & 233.97 & 25.01 & 220.60 & 17.87 & 3.95 \\
-Apple M4 Max & M05 & test & 16,384 & diagnostic & 176.87 & 233.97 & 32.28 & 220.60 & 24.72 & 1.62 \\
-Apple M4 Max & M06 & test & 0 & \textbf{primary} & 1203.59 & 1820.39 & 51.25 & 1719.34 & 42.85 & 0.45 \\
-Apple M4 Max & M06 & test & 4,096 & diagnostic & 1106.68 & 1820.39 & 64.49 & 1719.34 & 55.36 & 3.64 \\
-Apple M4 Max & M06 & test & 16,384 & diagnostic & 895.52 & 1820.39 & 103.28 & 1719.34 & 91.99 & 1.19 \\
-Apple M4 Max & M07 & test & 0 & \textbf{primary} & 1259.18 & 1640.13 & 30.25 & 1549.08 & 23.02 & 4.84 \\
-Apple M4 Max & M07 & test & 4,096 & diagnostic & 1200.41 & 1640.13 & 36.63 & 1549.08 & 29.05 & 3.30 \\
-Apple M4 Max & M07 & test & 16,384 & diagnostic & 995.75 & 1640.13 & 64.71 & 1549.08 & 55.57 & 1.37 \\
+MacBook M4 Max & M01 & train & 0 & \textbf{primary} & 589.73 & 547.32 & 7.19 & 589.73 & 0.00 & 0.05 \\
+MacBook M4 Max & M01 & train & 4,096 & diagnostic & 491.90 & 547.32 & 11.27 & 589.73 & 19.89 & 1.01 \\
+MacBook M4 Max & M01 & train & 16,384 & diagnostic & 382.76 & 547.32 & 42.99 & 589.73 & 54.07 & 3.47 \\
+MacBook M4 Max & M02 & train & 0 & \textbf{primary} & 1418.29 & 1704.93 & 20.21 & 1610.29 & 13.54 & 0.38 \\
+MacBook M4 Max & M02 & train & 4,096 & diagnostic & 1145.69 & 1704.93 & 48.81 & 1610.29 & 40.55 & 2.81 \\
+MacBook M4 Max & M02 & train & 16,384 & diagnostic & 741.02 & 1704.93 & 130.08 & 1610.29 & 117.31 & 2.63 \\
+MacBook M4 Max & M03 & train & 0 & \textbf{primary} & 1589.84 & 1556.35 & 2.11 & 1589.84 & 0.00 & 0.27 \\
+MacBook M4 Max & M03 & train & 4,096 & diagnostic & 1372.89 & 1556.35 & 13.36 & 1589.84 & 15.80 & 2.79 \\
+MacBook M4 Max & M03 & train & 16,384 & diagnostic & 848.96 & 1556.35 & 83.33 & 1589.84 & 87.27 & 0.72 \\
+MacBook M4 Max & M08 & train & 0 & \textbf{primary} & 1463.56 & 1549.58 & 5.88 & 1463.56 & 0.00 & 0.07 \\
+MacBook M4 Max & M08 & train & 4,096 & diagnostic & 1310.45 & 1549.58 & 18.25 & 1463.56 & 11.68 & 0.40 \\
+MacBook M4 Max & M08 & train & 16,384 & diagnostic & 941.78 & 1549.58 & 64.54 & 1463.56 & 55.40 & 0.89 \\
+MacBook M4 Max & M10 & train & 0 & \textbf{primary} & 819.16 & 727.86 & 11.14 & 687.46 & 16.08 & 0.13 \\
+MacBook M4 Max & M10 & train & 4,096 & diagnostic & 727.07 & 727.86 & 0.11 & 687.46 & 5.45 & 0.39 \\
+MacBook M4 Max & M10 & train & 16,384 & diagnostic & 564.60 & 727.86 & 28.92 & 687.46 & 21.76 & 1.59 \\
+MacBook M4 Max & M12 & train & 0 & \textbf{primary} & 1414.02 & 1886.30 & 33.40 & 1781.59 & 25.99 & 0.67 \\
+MacBook M4 Max & M12 & train & 4,096 & diagnostic & 1189.17 & 1886.30 & 58.62 & 1781.59 & 49.82 & 1.38 \\
+MacBook M4 Max & M12 & train & 16,384 & diagnostic & 880.48 & 1886.30 & 114.24 & 1781.59 & 102.34 & 1.39 \\
+MacBook M4 Max & M14 & train & 0 & \textbf{primary} & 239.52 & 242.31 & 1.17 & 239.52 & 0.00 & 2.73 \\
+MacBook M4 Max & M14 & train & 4,096 & diagnostic & 196.04 & 242.31 & 23.60 & 239.52 & 22.18 & 0.31 \\
+MacBook M4 Max & M14 & train & 16,384 & diagnostic & 158.60 & 242.31 & 52.78 & 239.52 & 51.02 & 1.33 \\
+MacBook M4 Max & M15 & train & 0 & \textbf{primary} & 238.54 & 238.54 & 0.00 & 238.54 & 0.00 & 2.42 \\
+MacBook M4 Max & M15 & train & 4,096 & diagnostic & 203.40 & 238.54 & 17.28 & 238.54 & 17.28 & 1.81 \\
+MacBook M4 Max & M15 & train & 16,384 & diagnostic & 172.91 & 238.54 & 37.96 & 238.54 & 37.96 & 1.74 \\
+MacBook M4 Max & M16 & train & 0 & \textbf{primary} & 235.14 & 238.54 & 1.45 & 235.14 & 0.00 & 1.72 \\
+MacBook M4 Max & M16 & train & 4,096 & diagnostic & 207.61 & 238.54 & 14.90 & 235.14 & 13.26 & 2.63 \\
+MacBook M4 Max & M16 & train & 16,384 & diagnostic & 180.12 & 238.54 & 32.43 & 235.14 & 30.54 & 1.42 \\
+MacBook M4 Max & M17 & train & 0 & \textbf{primary} & 241.51 & 238.54 & 1.23 & 241.51 & 0.00 & 2.59 \\
+MacBook M4 Max & M17 & train & 4,096 & diagnostic & 202.71 & 238.54 & 17.67 & 241.51 & 19.14 & 0.93 \\
+MacBook M4 Max & M17 & train & 16,384 & diagnostic & 164.64 & 238.54 & 44.89 & 241.51 & 46.69 & 2.76 \\
+MacBook M4 Max & M18 & train & 0 & \textbf{primary} & 224.91 & 238.54 & 6.06 & 224.91 & 0.00 & 3.91 \\
+MacBook M4 Max & M18 & train & 4,096 & diagnostic & 191.29 & 238.54 & 24.70 & 224.91 & 17.58 & 0.80 \\
+MacBook M4 Max & M18 & train & 16,384 & diagnostic & 162.37 & 238.54 & 46.91 & 224.91 & 38.52 & 2.61 \\
+MacBook M4 Max & M19 & train & 0 & \textbf{primary} & 225.20 & 238.54 & 5.92 & 225.20 & 0.00 & 2.87 \\
+MacBook M4 Max & M19 & train & 4,096 & diagnostic & 196.00 & 238.54 & 21.70 & 225.20 & 14.90 & 2.15 \\
+MacBook M4 Max & M19 & train & 16,384 & diagnostic & 174.79 & 238.54 & 36.47 & 225.20 & 28.84 & 1.41 \\
+MacBook M4 Max & M20 & train & 0 & \textbf{primary} & 239.03 & 238.54 & 0.20 & 239.03 & 0.00 & 2.54 \\
+MacBook M4 Max & M20 & train & 4,096 & diagnostic & 208.07 & 238.54 & 14.64 & 239.03 & 14.88 & 2.22 \\
+MacBook M4 Max & M20 & train & 16,384 & diagnostic & 181.38 & 238.54 & 31.52 & 239.03 & 31.78 & 1.35 \\
+MacBook M4 Max & M21 & train & 0 & \textbf{primary} & 2135.94 & 2119.33 & 0.78 & 2001.68 & 6.29 & 0.04 \\
+MacBook M4 Max & M21 & train & 4,096 & diagnostic & 1653.76 & 2119.33 & 28.15 & 2001.68 & 21.04 & 2.82 \\
+MacBook M4 Max & M21 & train & 16,384 & diagnostic & 965.07 & 2119.33 & 119.60 & 2001.68 & 107.41 & 1.34 \\
+MacBook M4 Max & M22 & train & 0 & \textbf{primary} & 2239.31 & 2119.33 & 5.36 & 2239.31 & 0.00 & 0.12 \\
+MacBook M4 Max & M22 & train & 4,096 & diagnostic & 1735.34 & 2119.33 & 22.13 & 2239.31 & 29.04 & 0.12 \\
+MacBook M4 Max & M22 & train & 16,384 & diagnostic & 892.27 & 2119.33 & 137.52 & 2239.31 & 150.97 & 1.34 \\
+MacBook M4 Max & M04 & test & 0 & \textbf{primary} & 4208.20 & 4547.98 & 8.07 & 4295.53 & 2.08 & 0.42 \\
+MacBook M4 Max & M04 & test & 4,096 & diagnostic & 3300.39 & 4547.98 & 37.80 & 4295.53 & 30.15 & 0.62 \\
+MacBook M4 Max & M04 & test & 16,384 & diagnostic & 1848.16 & 4547.98 & 146.08 & 4295.53 & 132.42 & 1.94 \\
+MacBook M4 Max & M05 & test & 0 & \textbf{primary} & 236.65 & 233.97 & 1.13 & 220.60 & 6.78 & 3.52 \\
+MacBook M4 Max & M05 & test & 4,096 & diagnostic & 187.15 & 233.97 & 25.01 & 220.60 & 17.87 & 3.95 \\
+MacBook M4 Max & M05 & test & 16,384 & diagnostic & 176.87 & 233.97 & 32.28 & 220.60 & 24.72 & 1.62 \\
+MacBook M4 Max & M06 & test & 0 & \textbf{primary} & 1203.59 & 1820.39 & 51.25 & 1719.34 & 42.85 & 0.45 \\
+MacBook M4 Max & M06 & test & 4,096 & diagnostic & 1106.68 & 1820.39 & 64.49 & 1719.34 & 55.36 & 3.64 \\
+MacBook M4 Max & M06 & test & 16,384 & diagnostic & 895.52 & 1820.39 & 103.28 & 1719.34 & 91.99 & 1.19 \\
+MacBook M4 Max & M07 & test & 0 & \textbf{primary} & 1259.18 & 1640.13 & 30.25 & 1549.08 & 23.02 & 4.84 \\
+MacBook M4 Max & M07 & test & 4,096 & diagnostic & 1200.41 & 1640.13 & 36.63 & 1549.08 & 29.05 & 3.30 \\
+MacBook M4 Max & M07 & test & 16,384 & diagnostic & 995.75 & 1640.13 & 64.71 & 1549.08 & 55.57 & 1.37 \\
 RTX 5080 & M01 & train & 0 & \textbf{primary} & 5624.55 & 4619.99 & 17.86 & 5624.55 & 0.00 & 5.17 \\
 RTX 5080 & M01 & train & 4,096 & diagnostic & 5030.69 & 4619.99 & 8.16 & 5624.55 & 11.80 & 3.92 \\
 RTX 5080 & M01 & train & 16,384 & diagnostic & 4336.80 & 4619.99 & 6.53 & 5624.55 & 29.69 & 2.60 \\
@@ -572,7 +572,7 @@ RTX 5080 & M07 & test & 16,384 & diagnostic & 9215.27 & 13844.48 & 50.23 & 12837
 \endgroup
 \end{landscape}
 \section{Repeatability and calibration}
-A separate repeatability series exists only for Apple M4 Max; RTX 5080 variability is represented by the five within-invocation repetitions in the row tables, not by an equivalent across-run series. The six Mac runs give mean decode throughput 166.457 tokens/s and sample between-run CV 1.613\%; prefill is 2133.091 tokens/s with CV 0.373\%. The max-minus-min spans are 4.34\% and 0.97\% of their respective means. Decode has a descriptive linear trend of 0.74\% per run. These are single-cell diagnostics, not general detection thresholds.
+A separate repeatability series exists only for the MacBook M4 Max; RTX 5080 variability is represented by the five within-invocation repetitions in the row tables, not by an equivalent across-run series. The six Mac runs give mean decode throughput 166.457 tokens/s and sample between-run CV 1.613\%; prefill is 2133.091 tokens/s with CV 0.373\%. The max-minus-min spans are 4.34\% and 0.97\% of their respective means. Decode has a descriptive linear trend of 0.74\% per run. These are single-cell diagnostics, not general detection thresholds.
 \begin{center}
 \small
 \begin{tabular}{rlrrrr}
@@ -619,7 +619,7 @@ decode & 103.616 & 87.594 & 15.46 \\
 \toprule
 Host & Platform & Accelerator & Threads & Reps & Settle (s) & Requested ngl\\
 \midrule
-Apple M4 Max & Darwin-arm64 & arm (Metal) & 12 & 5 & 45 & 99 \\
+MacBook M4 Max & Darwin-arm64 & arm (Metal) & 12 & 5 & 45 & 99 \\
 RTX 5080 & Windows-AMD64 & NVIDIA GeForce RTX 5080 & 16 & 5 & 45 & 99 \\
 \bottomrule
 \end{tabular}
@@ -631,11 +631,11 @@ The requested \texttt{n\_gpu\_layers=99} setting asks the runtime to offload as 
 \toprule
 Host & Calibration & Value & Detail\\
 \midrule
-Apple M4 Max & CPU STREAM-style triad & 48.558 GB/s & 7 repetitions \\
-Apple M4 Max & CPU FP32 matrix multiply & 2.458 TFLOP/s & 5 repetitions \\
-Apple M4 Max & MPS device copy & 380.052 GB/s & arm (Metal) \\
-Apple M4 Max & MPS FP16 matrix multiply & 13.950 TFLOP/s & arm (Metal) \\
-Apple M4 Max & LLM reference ceiling & 377.244 GB/s & \nolinkurl{Qwen3.5-9B-Q8_0.gguf} \\
+MacBook M4 Max & CPU STREAM-style triad & 48.558 GB/s & 7 repetitions \\
+MacBook M4 Max & CPU FP32 matrix multiply & 2.458 TFLOP/s & 5 repetitions \\
+MacBook M4 Max & MPS device copy & 380.052 GB/s & arm (Metal) \\
+MacBook M4 Max & MPS FP16 matrix multiply & 13.950 TFLOP/s & arm (Metal) \\
+MacBook M4 Max & LLM reference ceiling & 377.244 GB/s & \nolinkurl{Qwen3.5-9B-Q8_0.gguf} \\
 RTX 5080 & CPU STREAM-style triad & 13.458 GB/s & 7 repetitions \\
 RTX 5080 & CPU FP32 matrix multiply & 2.314 TFLOP/s & 5 repetitions \\
 RTX 5080 & CUDA device copy & 801.061 GB/s & NVIDIA GeForce RTX 5080 \\
@@ -650,9 +650,9 @@ For the fitted B1/B2 and P1/P2 models, the measured bandwidth or FLOP/s scale ca
 \toprule
 Host & Probe & File GB & Decode & SD & CV (\%) & Effective GB/s\\
 \midrule
-Apple M4 Max & \nolinkurl{Qwen3.8-27B-Q8_0.gguf} & 29.05 & 7.100 & 4.199 & 59.14 & 196.653 \\
-Apple M4 Max & \nolinkurl{Qwen3.5-9B-Q8_0.gguf} & 9.53 & 44.661 & 0.586 & 1.31 & 377.244 \\
-Apple M4 Max & \nolinkurl{Qwen3.5-4B-Q8_0.gguf} & 4.48 & 70.817 & 5.524 & 7.80 & 317.432 \\
+MacBook M4 Max & \nolinkurl{Qwen3.8-27B-Q8_0.gguf} & 29.05 & 7.100 & 4.199 & 59.14 & 196.653 \\
+MacBook M4 Max & \nolinkurl{Qwen3.5-9B-Q8_0.gguf} & 9.53 & 44.661 & 0.586 & 1.31 & 377.244 \\
+MacBook M4 Max & \nolinkurl{Qwen3.5-4B-Q8_0.gguf} & 4.48 & 70.817 & 5.524 & 7.80 & 317.432 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -664,10 +664,10 @@ The additive output-projection term is reported as a sensitivity analysis. It is
 \toprule
 Host & Loss & Model & Split & $n$ & MAPE & Median & P90 & Max\\
 \midrule
-Apple M4 Max & absolute time & one term & train & 45 & 12.38 & 4.97 & 34.07 & 91.71 \\
-Apple M4 Max & absolute time & one term & test & 12 & 19.26 & 14.43 & 46.77 & 61.03 \\
-Apple M4 Max & absolute time & two terms & train & 45 & 9.88 & 4.47 & 29.64 & 62.39 \\
-Apple M4 Max & absolute time & two terms & test & 12 & 34.03 & 30.21 & 62.96 & 72.96 \\
+MacBook M4 Max & absolute time & one term & train & 45 & 12.38 & 4.97 & 34.07 & 91.71 \\
+MacBook M4 Max & absolute time & one term & test & 12 & 19.26 & 14.43 & 46.77 & 61.03 \\
+MacBook M4 Max & absolute time & two terms & train & 45 & 9.88 & 4.47 & 29.64 & 62.39 \\
+MacBook M4 Max & absolute time & two terms & test & 12 & 34.03 & 30.21 & 62.96 & 72.96 \\
 RTX 5080 & absolute time & one term & train & 36 & 14.18 & 11.77 & 28.14 & 45.36 \\
 RTX 5080 & absolute time & one term & test & 6 & 44.01 & 31.40 & 97.73 & 105.71 \\
 RTX 5080 & absolute time & two terms & train & 36 & 12.84 & 9.76 & 30.05 & 39.86 \\
@@ -676,10 +676,10 @@ all hosts & absolute time & one term & train & 81 & 13.18 & 8.06 & 33.36 & 91.71
 all hosts & absolute time & one term & test & 18 & 27.51 & 14.43 & 69.65 & 105.71 \\
 all hosts & absolute time & two terms & train & 81 & 11.20 & 5.90 & 30.18 & 62.39 \\
 all hosts & absolute time & two terms & test & 18 & 31.79 & 30.21 & 61.58 & 72.96 \\
-Apple M4 Max & relative time & one term & train & 45 & 11.40 & 4.35 & 28.13 & 83.22 \\
-Apple M4 Max & relative time & one term & test & 12 & 15.17 & 11.87 & 40.27 & 53.89 \\
-Apple M4 Max & relative time & two terms & train & 45 & 8.34 & 4.68 & 18.01 & 46.86 \\
-Apple M4 Max & relative time & two terms & test & 12 & 20.58 & 19.27 & 38.22 & 45.61 \\
+MacBook M4 Max & relative time & one term & train & 45 & 11.40 & 4.35 & 28.13 & 83.22 \\
+MacBook M4 Max & relative time & one term & test & 12 & 15.17 & 11.87 & 40.27 & 53.89 \\
+MacBook M4 Max & relative time & two terms & train & 45 & 8.34 & 4.68 & 18.01 & 46.86 \\
+MacBook M4 Max & relative time & two terms & test & 12 & 20.58 & 19.27 & 38.22 & 45.61 \\
 RTX 5080 & relative time & one term & train & 36 & 12.55 & 11.72 & 22.83 & 34.79 \\
 RTX 5080 & relative time & one term & test & 6 & 40.81 & 29.12 & 83.35 & 90.75 \\
 RTX 5080 & relative time & two terms & train & 36 & 11.80 & 10.35 & 20.95 & 28.62 \\
@@ -693,7 +693,7 @@ all hosts & relative time & two terms & test & 18 & 23.22 & 19.27 & 47.62 & 57.3
 \end{center}
 \begin{landscape}
 \section{Provenance and explicit limits}
-The on-disk inputs used for this appendix have the following SHA-256 digests. The repository HEAD at generation was \texttt{1bdce5e0\allowbreak{}d917dce1\allowbreak{}52cba480\allowbreak{}9d05fc19\allowbreak{}22a98797}; the generator does not assert a clean working tree, so the file digests, rather than this commit alone, identify the inputs.
+The on-disk inputs used for this appendix have the following SHA-256 digests. The repository HEAD at generation was \texttt{d1b707c2\allowbreak{}ed4d0b48\allowbreak{}3b0edc62\allowbreak{}21f18946\allowbreak{}76e8149e}; the generator does not assert a clean working tree, so the file digests, rather than this commit alone, identify the inputs.
 \begingroup
 \small
 \setlength{\tabcolsep}{3.5pt}
@@ -733,12 +733,12 @@ archived uncontrolled comparison & \nolinkurl{results/contaminated/measurements_
 analysis implementation & \nolinkurl{llmperf/analyze.py} & \texttt{f94a0b83\allowbreak{}f4d8cd5a\allowbreak{}3c7e1bf8\allowbreak{}da3a8b41\allowbreak{}21ecd357\allowbreak{}8191484b\allowbreak{}8b7e7c39\allowbreak{}bb6a5374} \\
 refinement implementation & \nolinkurl{llmperf/refine.py} & \texttt{523dd697\allowbreak{}2e20543c\allowbreak{}314a4f40\allowbreak{}761ce5fd\allowbreak{}75da5d2f\allowbreak{}6b86532c\allowbreak{}739d022f\allowbreak{}ed535786} \\
 metadata implementation & \nolinkurl{llmperf/common.py} & \texttt{f1f4a7cd\allowbreak{}9a927b05\allowbreak{}344cec77\allowbreak{}ebad6492\allowbreak{}b8f81955\allowbreak{}09f897df\allowbreak{}5443ca50\allowbreak{}604df592} \\
-appendix generator & \nolinkurl{paper/icassp2027/generate_supplement.py} & \texttt{be7452a1\allowbreak{}e12d4e9e\allowbreak{}c1b3f980\allowbreak{}f200c1c4\allowbreak{}e8339ce1\allowbreak{}d456f3ad\allowbreak{}ce3f3cb3\allowbreak{}cd59a208} \\
+appendix generator & \nolinkurl{paper/icassp2027/generate_supplement.py} & \texttt{65bf1ce0\allowbreak{}3fabf1b7\allowbreak{}d5b6cb35\allowbreak{}6c3b317a\allowbreak{}d7e7554c\allowbreak{}b8c4659c\allowbreak{}9daef169\allowbreak{}fb119590} \\
 \end{longtable}
 \endgroup
 \end{landscape}
 \begin{itemize}
-\item Apple M4 Max and RTX 5080 contributed unequal, overlapping cohorts. Headline coefficients are fit separately by host. The leave-one-host-out audit uses measured target bandwidth and only two systems, so it does not establish universal transfer to new runtime stacks or formats.
+\item The MacBook Pro M4 Max and RTX 5080 contributed unequal, overlapping cohorts. The planned Mac Studio has no rows in this dataset. Headline coefficients are fit separately by measured host. The leave-one-host-out audit therefore uses only two systems and does not establish universal transfer to new runtime stacks or formats.
 \item Every scored row records a requested \texttt{n\_gpu\_layers=99}, but no device-memory trace or runtime-reported resident-layer count was retained. This is a maximal-offload request, not proof of full accelerator residency; no partial-offload sweep or offload-cliff result exists.
 \item The largest RTX modeled file-plus-KV footprint is 17.508 GB for \nolinkurl{Qwen3.8-27B-UD-Q3_K_XL.gguf} at depth 16,384, while calibration reports 17.094 GB of device memory. The differing accounting conventions further preclude a residency claim.
 \item The Mac rows use the placeholder commit value \texttt{nogit}; both runtime version queries returned usage lines rather than immutable \texttt{llama.cpp} revisions. The RTX project commit field is not itself a runtime binary revision.

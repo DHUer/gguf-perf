@@ -172,7 +172,7 @@ repeats each test, and reports mean and standard deviation separately for
 prefill and decode. We did not write a replacement timing harness; we
 constrained the one that exists and recorded its context.
 
-**Host.** Apple M4 Max, 64 GB unified memory, 12 performance cores, macOS. The
+**Host.** MacBook Pro M4 Max, 64 GB unified memory, 12 performance cores, macOS. The
 machine is corporate-managed and carries endpoint-monitoring, data-loss-
 prevention and log-shipping agents that cannot be disabled. This is
 representative of the class, not a pathological case.

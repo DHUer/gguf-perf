@@ -31,7 +31,8 @@ ROOT = HERE.parents[1]
 RESULTS = ROOT / "results"
 
 HOST_LABELS = {
-    "lun-mac": "Apple M4 Max",
+    "lun-mac": "MacBook M4 Max",
+    "mac-studio-m4-max": "Mac Studio M4 Max",
     "rtx5080": "RTX 5080",
 }
 
@@ -798,7 +799,7 @@ def main() -> None:
         r"\end{center}",
         "Attempted configurations with no successful row are "
         + ("; ".join(failures) if failures else "none")
-        + ". On Apple M4 Max, two raw attempts of the one gpt-oss-120B "
+        + ". On the MacBook Pro M4 Max, two raw attempts of the one gpt-oss-120B "
         r"configuration report \texttt{failed to decode prompt batch, res=-3}; "
         "these are prompt-batch failures, not demonstrated model-load or "
         "out-of-memory failures. "
@@ -1111,7 +1112,7 @@ def main() -> None:
         split = (str(dec.loc[dec.model_file == name, "split"].iloc[0])
                  if name in scored else "probe only")
         measured_hosts = ", ".join(
-            "M4" if host == "lun-mac" else "RTX"
+            "MB" if host == "lun-mac" else "RTX"
             for host in hosts
             if ((dec.host == host) & (dec.model_file == name)).any()
         ) or "--"
@@ -1150,7 +1151,7 @@ def main() -> None:
 
     add_longtable(
         lines,
-        "Selected model identity, source, and file size. Sizes are exact bytes; host codes are M4 (Apple M4 Max) and RTX (RTX 5080), and ``probe only'' denotes a file excluded from every prediction fit and score.",
+        "Selected model identity, source, and file size. Sizes are exact bytes; host codes are MB (MacBook M4 Max) and RTX (RTX 5080), and ``probe only'' denotes a file excluded from every prediction fit and score.",
         "tab:model-id",
         r"@{}l l L{0.75in} L{2.7in} L{2.45in} L{0.9in} l r@{}",
         [
@@ -1325,7 +1326,7 @@ def main() -> None:
     lines.extend(
         [
             r"\section{Repeatability and calibration}",
-            "A separate repeatability series exists only for Apple M4 Max; RTX 5080 "
+            "A separate repeatability series exists only for the MacBook M4 Max; RTX 5080 "
             "variability is represented by the five within-invocation repetitions in "
             "the row tables, not by an equivalent across-run series. "
             f"The six Mac runs give mean decode throughput {repeat_mean:.3f} tokens/s "
@@ -1590,7 +1591,7 @@ def main() -> None:
     lines.extend(
         [
             r"\begin{itemize}",
-            r"\item Apple M4 Max and RTX 5080 contributed unequal, overlapping cohorts. Headline coefficients are fit separately by host. The leave-one-host-out audit uses measured target bandwidth and only two systems, so it does not establish universal transfer to new runtime stacks or formats.",
+            r"\item The MacBook Pro M4 Max and RTX 5080 contributed unequal, overlapping cohorts. The planned Mac Studio has no rows in this dataset. Headline coefficients are fit separately by measured host. The leave-one-host-out audit therefore uses only two systems and does not establish universal transfer to new runtime stacks or formats.",
             r"\item Every scored row records a requested \texttt{n\_gpu\_layers=99}, but no device-memory trace or runtime-reported resident-layer count was retained. This is a maximal-offload request, not proof of full accelerator residency; no partial-offload sweep or offload-cliff result exists.",
             f"\\item The largest RTX modeled file-plus-KV footprint is "
             f"{float(rtx_largest.bytes_total) / 1e9:.3f} GB for "

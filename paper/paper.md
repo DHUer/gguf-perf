@@ -283,7 +283,7 @@ they disagree, and the disagreement is itself a finding:
 | `torch_gpu` | Device-side copy bandwidth and FP16 matmul | CUDA only |
 | `llm_ref` | Effective bandwidth back-solved from one llama-bench decode run on the smallest model | Any backend |
 
-**Measured on the Apple M4 Max in this study, the CPU triad reaches 67.9 GB/s
+**Measured on the MacBook Pro M4 Max in this study, the CPU triad reaches 67.9 GB/s
 while the GPU sustains 313.8 GB/s of effective decode bandwidth through the
 same unified memory** — a factor of 4.6. CPU cores cannot saturate the fabric
 the GPU reaches. Using `cpu_triad` as the bandwidth term on a Metal machine
@@ -304,13 +304,13 @@ since its η is 1.0 by construction.
 
 | Machine | Compute | Memory | Role |
 |---|---|---|---|
-| Mac Studio, M4 Max (16C CPU / 40C GPU) | Metal | 128 GB unified | Large-capacity unified memory; no offload cliff |
-| MacBook Pro, M4 Max | Metal | 64 GB unified | Same silicon generation, thermally constrained |
+| Mac Studio, M4 Max (16C CPU / 40C GPU) | Metal | 128 GB unified | Planned validation host; no rows in the current dataset |
+| MacBook Pro, M4 Max | Metal | 64 GB unified | Measured Apple host; thermally constrained |
 | Lenovo ThinkStation P8, RTX 5080 | CUDA sm_120 | 16 GB VRAM + 128 GB DDR5 | Discrete GPU; hard capacity wall, full offload range |
 
-The two Apple machines share a chip generation and differ mainly in thermal
-envelope and capacity, which isolates throttling from architecture — a
-controlled comparison rarely available in published work. The ThinkStation's
+The planned Apple comparison uses one chip generation across different thermal
+envelopes and capacities, but no Mac Studio measurement has yet been collected.
+The ThinkStation's
 128 GB of host RAM is what makes the offload cliff fully traceable: a model far
 larger than VRAM can still be run with a controlled fraction of layers resident.
 

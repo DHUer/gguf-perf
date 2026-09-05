@@ -1,7 +1,7 @@
 # GGUF throughput prediction on consumer hardware
 
 This repository measures and predicts single-sequence `llama.cpp` throughput from
-GGUF metadata. The completed study compares an Apple M4 Max with an NVIDIA RTX
+GGUF metadata. The completed study compares a 64-GB MacBook Pro M4 Max with an NVIDIA RTX
 5080 and is the source for the ICASSP 2027 manuscript in
 [`paper/icassp2027/`](paper/icassp2027/).
 
@@ -20,15 +20,15 @@ layer has a global KV cache.
 
 ## Completed evidence
 
-The strict selector retains 216 successful phase--depth rows: 132 from the M4
-Max and 84 from the RTX 5080. After the Mac calibration probes are excluded,
+The strict selector retains 216 successful phase--depth rows: 132 from the
+MacBook Pro M4 Max and 84 from the RTX 5080. After the MacBook calibration probes are excluded,
 the scored cohort contains 99 decode and 99 prefill rows from 33 host--file
 configurations and 21 unique GGUF files. RTX contributes 14 measured files,
 split into 12 training and two held-out configurations.
 
 | Host | Decode B2 train/test MAPE | Prefill P2 train/test MAPE |
 |---|---:|---:|
-| Apple M4 Max | 10.39% / 13.11% | 4.13% / 18.68% |
+| MacBook Pro M4 Max | 10.39% / 13.11% | 4.13% / 18.68% |
 | NVIDIA RTX 5080 | 10.12% / 36.15% | 5.86% / 108.18% |
 
 The table reports target-host fits. In a separate B2 median-ratio
@@ -121,6 +121,28 @@ Paper build commands are documented in
 Only use this path to extend the study. Give every machine a stable host name,
 run the environment check, calibrate it independently, and append measurements
 to a host-specific CSV.
+
+For the planned 128-GB Mac Studio M4 Max, use the stable host ID
+`mac-studio-m4-max`. Its outputs must remain separate from the existing
+64-GB MacBook data in `measurements_lun-mac.csv`.
+
+On macOS:
+
+```bash
+export LLMPERF_HOST=mac-studio-m4-max
+export LLAMA_BENCH="$(command -v llama-bench)"
+
+python -m llmperf.doctor
+python -m llmperf.calibrate
+python -m llmperf.sweep --dry-run --repetitions 5 --settle 45 --depths 0 4096 16384
+python -m llmperf.sweep --repetitions 5 --settle 45 --depths 0 4096 16384
+```
+
+This writes `calibration_mac-studio-m4-max.json`,
+`env_mac-studio-m4-max.json`, and `measurements_mac-studio-m4-max.csv` under
+`results/`. Prefer copying the exact GGUF cohort from the MacBook; if that is
+not possible, use `python -m llmperf.fetch --set all` and verify the frozen
+manifest before measuring.
 
 ```powershell
 $env:LLMPERF_HOST = 'new-host-name'

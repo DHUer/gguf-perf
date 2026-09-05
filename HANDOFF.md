@@ -5,7 +5,7 @@ paper build.
 
 ## State in one paragraph
 
-The M4 Max and RTX 5080 campaigns needed for the paper are complete. The strict
+The 64-GB MacBook Pro M4 Max and RTX 5080 campaigns needed for the paper are complete. The strict
 selector retains 216 measurements, and the scored data contain 99 decode plus
 99 prefill rows across 33 host--file configurations and 21 unique GGUF files.
 Target-fitted B2 reaches 13.11% held-out MAPE on the Mac and 36.15% on RTX.
@@ -38,8 +38,8 @@ Headline MAPE values are generated in
 
 | Host | Split | B0 | B1 | B2 | P2 depth 0 |
 |---|---|---:|---:|---:|---:|
-| M4 Max | train | 33.57 | 15.80 | **10.39** | **4.13** |
-| M4 Max | test | 46.89 | 49.36 | **13.11** | **18.68** |
+| MacBook M4 Max | train | 33.57 | 15.80 | **10.39** | **4.13** |
+| MacBook M4 Max | test | 46.89 | 49.36 | **13.11** | **18.68** |
 | RTX 5080 | train | 20.27 | **9.85** | 10.12 | **5.86** |
 | RTX 5080 | test | 41.65 | 51.85 | **36.15** | 108.18 |
 
@@ -69,6 +69,8 @@ Headline MAPE values are generated in
 - **No residency claim.** `n_gpu_layers=99` is a request, not physical VRAM
   telemetry. Windows shared-memory spill was not measured.
 - **No offload-cliff claim.** No `n_gpu_layers < 99` sweep was collected.
+- **No Mac Studio claim.** The older design draft lists a planned 128-GB Mac
+  Studio, but every selected Apple row comes from the 64-GB MacBook Pro.
 - **No universal quantization claim.** Many RTX quantization groups have only
   one training family, and each host's held-out set contains only Q4 variants.
 - **No accepted output-projection extension.** Its leave-one-host-out errors
@@ -102,8 +104,8 @@ The current generated artifacts are:
   content on pages 1--4 and references only on page 5
 - `paper/icassp2027/gguf-throughput-supplement.pdf` — 16 pages
 
-Their SHA-256 values are `80C5F60A9050E6E1184195C388987CD5F4CDD578D8C0C7D36D26BE6838F2CE4A`
-and `38D8BA99504B0E0B9CC5AA659496343EE802C4C725CF79B76185C3C0454AEDDF`,
+Their SHA-256 values are `DC67DDFC94E2566186D0472990F9EE08E947A0C7FD4F43A7ABA209E8CF20D86D`
+and `1429702520E9B2AE3351533C5D7F75D723F451D4F763D98F584B5E3198AFF96C`,
 respectively.
 
 The main-paper title is `GGUF-METADATA PREDICTION OF SINGLE-SEQUENCE LLAMA.CPP THROUGHPUT ACROSS TWO SYSTEMS`.

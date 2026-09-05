@@ -24,14 +24,14 @@
 We predict single-sequence model throughput from GGUF metadata using
 roofline-shaped predictors with quantization-specific scale factors fitted on
 reference models.  The selected cohort comprises 216 phase--depth measurements
-on an Apple M4 Max and an NVIDIA RTX 5080.  On host-specific held-out sets of
+on a MacBook Pro M4 Max and an NVIDIA RTX 5080.  On host-specific held-out sets of
 four and two configurations, an active-parameter decode model obtains 13.1\%
 and 36.1\% mean absolute percentage error (MAPE), versus 49.4\% and 51.9\% when
 charging total parameters.  Cross-host coefficient transfer yields 13.9\% and
 36.7\% test MAPE, but over all target rows its error is 20.8--21.7\%, versus
 11.0--13.8\% after target fitting.  A low-bit model ladder changes ordering
 across host/runtime stacks.  The P2 prefill baseline is unsupported on RTX, where
-held-out error reaches 108.2\% versus 18.7\% on the M4 Max.  GGUF structure
+held-out error reaches 108.2\% versus 18.7\% on the MacBook.  GGUF structure
 helps on both systems, but fitted efficiencies are not universal.
 \end{abstract}
 
@@ -79,7 +79,7 @@ specification \cite{ggufspec}.
   \centering
   \includegraphics[width=\textwidth]{../../figures/paper/fig1_accuracy.pdf}
   \caption{B2 decode predictions, separated by host.  The 99 points comprise
-  57 M4 Max and 42 RTX observations, with 81 training and 18 held-out; dashed
+  57 MacBook and 42 RTX observations, with 81 training and 18 held-out; dashed
   lines mark $\pm25\%$.  Open markers are MoE and orange markers are held-out.}
   \label{fig:accuracy}
 \end{figure*}
@@ -153,8 +153,8 @@ tests, not part of the fit.
 \section{Experimental method}
 \label{sec:method}
 
-The first host is an Apple M4 Max with 64~GB unified memory and 12 benchmark
-threads; its device-copy bandwidth and FP16 matrix calibration are
+The first host is a MacBook Pro M4 Max with 64~GB unified memory; its 12
+performance cores are used as benchmark threads.  Device-copy bandwidth and FP16 matrix calibration are
 380.1~GB/s and 13.95~TFLOP/s.  The second is an RTX 5080 with 16,302~MiB reported
 VRAM, CUDA, and 16 threads; device-copy and FP16 calibrations are 801.1~GB/s and
 118.83~TFLOP/s.  The managed RTX runner directory is labeled b10794, but its
@@ -212,8 +212,8 @@ are scored at depth zero.}
 \toprule
 Host & Split (cfg.) & B0 & B1 & B2 & P1 & P2\\
 \midrule
-M4 Max & train (15) & 33.6 & 15.8 & \textbf{10.4} & 6.8 & \textbf{4.1}\\
-       & test (4)   & 46.9 & 49.4 & \textbf{13.1} & 22.7 & \textbf{18.7}\\
+MacBook & train (15) & 33.6 & 15.8 & \textbf{10.4} & 6.8 & \textbf{4.1}\\
+        & test (4)   & 46.9 & 49.4 & \textbf{13.1} & 22.7 & \textbf{18.7}\\
 RTX 5080 & train (12) & 20.3 & \textbf{9.8} & 10.1 & 14.5 & \textbf{5.9}\\
          & test (2)   & 41.7 & 51.9 & \textbf{36.1} & 124.5 & 108.2\\
 \bottomrule
@@ -223,7 +223,7 @@ RTX 5080 & train (12) & 20.3 & \textbf{9.8} & 10.1 & 14.5 & \textbf{5.9}\\
 \subsection{Host-adapted decode}
 
 Figure~\ref{fig:accuracy} and Table~\ref{tab:error} show the primary result.
-On the M4 Max, B2 achieves 10.4\% train and 13.1\% test MAPE; on RTX, it
+On the MacBook, B2 achieves 10.4\% train and 13.1\% test MAPE; on RTX, it
 achieves 10.1\% and 36.1\%.
 The RTX test median and maximum are 25.8\% and 69.0\%; its dense Nemotron 4B
 and MoE Ling tests average 20.4\% and 51.9\%, respectively.  The Mac
