@@ -1,0 +1,28 @@
+Hardware:
+
+    Hardware Overview:
+
+      Model Name: Mac Studio
+      Model Identifier: Mac16,9
+      Model Number: Z1CD00180LL/A
+      Chip: Apple M4 Max
+      Total Number of Cores: 16 (12 Performance and 4 Efficiency)
+      Memory: 128 GB
+      System Firmware Version: 18000.161.10
+      OS Loader Version: 18000.161.10
+      Serial Number (system): REDACTED
+      Hardware UUID: REDACTED
+      Provisioning UDID: REDACTED
+      Activation Lock Status: REDACTED
+
+Graphics/Displays:
+
+    Apple M4 Max:
+
+      Chipset Model: Apple M4 Max
+      Type: GPU
+      Bus: Built-In
+      Total Number of Cores: 40
+      Vendor: Apple (0x106b)
+      Metal Support: Metal 4
+      Display details: OMITTED (not relevant to benchmark reproduction)

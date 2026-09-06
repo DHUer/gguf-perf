@@ -1,181 +1,173 @@
 # Project handoff
 
-Last updated 2026-09-04 after completing the two-host analysis and ICASSP 2027
-paper build.
+Last updated 2026-09-05 after completing the MacBook M4 Max, Mac Studio M4
+Max, and RTX 5080 campaigns, analysis, and final paper build.
 
 ## State in one paragraph
 
-The 64-GB MacBook Pro M4 Max and RTX 5080 campaigns needed for the paper are complete. The strict
-selector retains 216 measurements, and the scored data contain 99 decode plus
-99 prefill rows across 33 host--file configurations and 21 unique GGUF files.
-Target-fitted B2 reaches 13.11% held-out MAPE on the Mac and 36.15% on RTX.
-B2 median-ratio transfer gives 13.94% and 36.70% on those same test rows, so
-target adaptation is not shown to be necessary within this narrow Q4 test. Its
-all-target MAPE is 20.82%/21.69%, versus target-fitted all-row MAPE of
-10.96%/13.84%; the 57.1%/116.8% values belong only to a rejected two-term
-extension. The main PDF has technical content on pages 1--4
-and references only on page 5, and the supplement is 16 pages. The only
-non-computational submission blocker is the real author name, affiliation, and
-email required by the non-blind ICASSP submission.
+The strict selector retains 354 protocol-complete rows: 132 MacBook, 138 Mac
+Studio, and 84 RTX. After six Apple calibration-probe configurations are
+excluded, the scored data contain 159 decode plus 159 prefill rows across 53
+host--file configurations and 22 unique GGUF files. Target-fitted B2 held-out
+MAPE is 13.11%, 14.37%, and 36.15% on MacBook, Studio, and RTX. Test-only B2
+transfer from the remaining host pair gives 11.59%, 16.76%, and 35.97%. The
+derived result tables, figures, manuscript, and packaged PDFs are current. The
+audit passes every machine-verifiable check; verified author identity remains
+the only non-computational blocker.
 
-## What is complete
+## Completed campaigns
 
-- Mac: 132 selected rows from 22 measured files. After three Q8 calibration
-  probes are excluded, 15 training and four held-out configurations contribute
-  57 decode and 57 prefill rows.
-- RTX: 84 selected rows from 14 files, all scored: 12 training and two held-out
-  configurations contribute 42 rows per phase.
-- All selected RTX cells completed with CUDA, five repetitions, a 45-second
-  settle, requested `n_gpu_layers=99`, and depths 0/4096/16384.
-- Analysis, host-separated figures, the ICASSP source, and the complete
-  supplement have been regenerated for both hosts.
-- The local RTX model directory contains the 14-file, 100.7-GB cohort. There is
-  no interrupted `.part` download to resume.
+- MacBook Pro M4 Max (`lun-mac`): 132 selected rows from 22 successful files;
+  19 scored configurations after three Q8 probes are excluded, split 15 train
+  and four test, yielding 57 rows per phase.
+- Mac Studio M4 Max (`mac-studio-m4-max`): the complete 23-file manifest
+  produced 138 selected rows with no failures; 20 scored configurations after
+  three Q8 probes are excluded, split 15 train and five test, yielding 60 rows
+  per phase. The 63.39-GB gpt-oss-120B file completed all six cells.
+- RTX 5080 (`rtx5080`): 84 selected rows from 14 scored files, split 12 train
+  and two test, yielding 42 rows per phase.
+- Combined: 354 selected rows, including 36 Apple probe observations, and 318
+  scored rows across 53 host--file configurations.
 
-Headline MAPE values are generated in
-`results/error_table_by_host.csv` and
-`results/error_table_prefill_by_host.csv`:
+Every selected row uses flash attention, F16 K/V, five repetitions, 45-second
+settling, requested `n_gpu_layers=99`, and depths 0/4096/16384. No
+partial-offload sweep was collected.
+
+## Checked results
 
 | Host | Split | B0 | B1 | B2 | P2 depth 0 |
 |---|---|---:|---:|---:|---:|
-| MacBook M4 Max | train | 33.57 | 15.80 | **10.39** | **4.13** |
-| MacBook M4 Max | test | 46.89 | 49.36 | **13.11** | **18.68** |
-| RTX 5080 | train | 20.27 | **9.85** | 10.12 | **5.86** |
-| RTX 5080 | test | 41.65 | 51.85 | **36.15** | 108.18 |
+| MacBook M4 Max | train | 33.57% | 15.80% | **10.39%** | **4.13%** |
+| MacBook M4 Max | test | 46.89% | 49.36% | **13.11%** | **18.68%** |
+| Mac Studio M4 Max | train | 32.95% | 17.76% | **12.40%** | **4.27%** |
+| Mac Studio M4 Max | test | 57.98% | 55.25% | **14.37%** | **22.23%** |
+| RTX 5080 | train | 20.27% | **9.85%** | 10.12% | **5.86%** |
+| RTX 5080 | test | 41.65% | 51.85% | **36.15%** | 108.18% |
 
-## Claims that survived
+The three-host B2 transfer results are:
 
-1. Activated-parameter accounting materially improves held-out decode error on
-   both hosts relative to charging all stored weights.
-2. Per-layer GGUF metadata prevents large KV-byte overestimates for hybrid and
-   sliding-window architectures.
-3. A B2 median ratio learned on the other host transfers usefully to the fixed
-   held-out Q4 rows: 13.94% Mac and 36.70% RTX MAPE, close to target-fitted
-   13.11% and 36.15%.
-4. Quantization efficiency and even low-bit ordering are backend-specific.
+| Target | All-target MAPE / median / max | Test MAPE / median / max | Target-fitted all/test MAPE |
+|---|---:|---:|---:|
+| MacBook | 14.47% / 8.02% / 73.61% | 11.59% / 6.00% / 45.82% | 10.96% / 13.11% |
+| Mac Studio | 15.42% / 10.78% / 84.30% | 16.76% / 14.36% / 57.74% | 12.89% / 14.37% |
+| RTX 5080 | 20.80% / 18.18% / 68.13% | 35.97% / 25.66% / 68.13% | 13.84% / 36.15% |
 
-## Negative results and hard boundaries
+The fixed test sets span MXFP4, Q4_K, and Q4_K_M, and the RTX target has only
+two configurations. Transfer is informative but does not establish a universal
+coefficient. The rejected two-term absolute-time extension has all-target MAPE
+of 17.88%, 16.93%, and 149.33%; those values are not B2 results.
 
-- **Cross-host transfer is useful but narrowly tested.** Across all target rows,
-  B2 median-ratio transfer gives 20.82% MAPE on 57 Mac rows and 21.69% on 42
-  RTX rows (median 15.41%/18.75%, maximum 75.81%/71.53%), versus target-fitted
-  all-row MAPE of 10.96%/13.84%. On target test rows alone it gives
-  13.94%/36.70% MAPE (median 8.63%/26.18%), nearly matching the target-fitted
-  13.11%/36.15%. All six test configurations are Q4 variants, and RTX has only
-  two, so this does not establish universal transfer.
-- **The prefill baseline is unsupported on RTX under this protocol.** P2
-  held-out depth-zero MAPE is 108.18% on RTX, and it worsens outside the
-  equation's zero-prefix scope.
-- **No residency claim.** `n_gpu_layers=99` is a request, not physical VRAM
-  telemetry. Windows shared-memory spill was not measured.
-- **No offload-cliff claim.** No `n_gpu_layers < 99` sweep was collected.
-- **No Mac Studio claim.** The older design draft lists a planned 128-GB Mac
-  Studio, but every selected Apple row comes from the 64-GB MacBook Pro.
-- **No universal quantization claim.** Many RTX quantization groups have only
-  one training family, and each host's held-out set contains only Q4 variants.
-- **No accepted output-projection extension.** Its leave-one-host-out errors
-  are 57.1% on Mac and 116.8% on RTX, far worse than B2, and it did not deliver
-  a material, physically credible held-out improvement.
+The prefill model remains a negative result on RTX. At 16K existing-prefix
+depth, held-out P2 MAPE is 76.18% on MacBook, 68.11% on Studio, and 133.34% on
+RTX, outside the zero-prefix equation's intended scope.
 
-The RTX prefill protocol is an explicit limitation: 29 of 42 selected prefill
-rows exceed 3% within-cell CV, whereas the selected RTX decode maximum is
-1.652%. Do not filter those prefill rows after looking at their errors.
+## Measurement quality
 
-`results/host_transfer.csv` is the generated transfer source: it contains B2
-over all target rows, B2 over target test rows, and the rejected two-term
-absolute-time extension.
+- MacBook decode median/max CV: 0.827%/3.035%; one of 66 rows exceeds 3%.
+  Prefill median/max: 1.375%/4.840%; 8/66 exceed 3%.
+- Studio decode median/max CV: 0.424%/2.304%. Prefill median/max:
+  0.117%/0.963%. No Studio selected row exceeds 3%.
+- RTX decode median/max CV: 0.433%/1.652%. Prefill median/max:
+  3.558%/39.192%; 29/42 exceed 3%.
 
-## Submission action
+Prefill was not gated. Retain its noisy observations; never remove cells after
+examining prediction residuals.
 
-Replace this placeholder in `paper/icassp2027/main.tex`:
+## Studio environment and provenance
 
-```text
-Author Name
-Affiliation
-author@example.com
+Repository root: `/Users/lun/Projects/O1A/gguf-perf`.
+
+```bash
+export LLMPERF_HOST=mac-studio-m4-max
+export LLAMA_BENCH=/Users/lun/.local/share/gguf-perf/llama-b10794/llama-bench
+export SSL_CERT_FILE=/etc/ssl/cert.pem
 ```
 
-with the verified author identity, then rebuild and recheck the PDFs. ICASSP
-2027 is not blind. Do not invent these fields.
+- Mac Studio Mac16,9: M4 Max, 12 performance plus four efficiency CPU cores,
+  40 GPU cores, 128 GB unified memory, macOS 26.6.2.
+- Calibration: 396.73 GB/s MPS device-copy bandwidth and 15.00 TFLOP/s FP16.
+- Official arm64 llama.cpp b10794 binary and archive hashes are recorded under
+  `results/`; this tag matches the RTX runner directory.
+- Tectonic 0.17.0:
+  `/Users/lun/.local/share/gguf-perf/tectonic-0.17.0/tectonic`.
+- Offline cache: `/Users/lun/.local/share/gguf-perf/tectonic-cache`.
+- Exactly 23 GGUF files total 336,367,242,336 bytes. There are no extra GGUFs
+  or `.part` files.
+- `results/model_integrity_mac-studio-m4-max.json` records successful full-file
+  SHA-256, uncached header parsing, and frozen metadata checks for every file.
+- `results/measurement_source_tree_mac-studio-m4-max.sha256` freezes all direct
+  `llmperf/*.py` modules and `requirements.txt` used for measurement.
+- Repository `.git` metadata and Apple command-line tools are absent. The
+  recorded handoff commit is `d1b707c2ed4d0b483b0edc6221f1894676e8149e`;
+  preserve the limitation instead of manufacturing a local commit identity.
 
-The current generated artifacts are:
+Do not refresh the measurement-source checksum after editing analysis code: it
+attests what ran. Paper, tests, and documentation are outside that inventory.
 
-- `paper/icassp2027/gguf-throughput-icassp2027.pdf` — five pages: technical
-  content on pages 1--4 and references only on page 5
-- `paper/icassp2027/gguf-throughput-supplement.pdf` — 16 pages
+## Paper state
 
-Their SHA-256 values are `DC67DDFC94E2566186D0472990F9EE08E947A0C7FD4F43A7ABA209E8CF20D86D`
-and `1429702520E9B2AE3351533C5D7F75D723F451D4F763D98F584B5E3198AFF96C`,
-respectively.
+The regenerated CSV exports, host-separated publication figures,
+`paper/icassp2027/supplement.tex`, and `supplement_summary.pdf` contain the
+three-host results. The final main and supplement PDFs are packaged and match
+their build products byte-for-byte.
 
-The main-paper title is `GGUF-METADATA PREDICTION OF SINGLE-SEQUENCE LLAMA.CPP THROUGHPUT ACROSS TWO SYSTEMS`.
+The title is
+`GGUF-METADATA PREDICTION OF SINGLE-SEQUENCE LLAMA.CPP THROUGHPUT ACROSS THREE SYSTEMS`.
 
-## Reproduce and validate
+- Main PDF: five pages, with technical content on pages 1--4 and references
+  only on page 5; SHA-256
+  `303d94f4612d73a68d164d4236b564b84d97338f172b444639681f32a821e64d`.
+- Supplement PDF: 22 pages; SHA-256
+  `03341a1748383ce0e3e70054acf86519595f1c80ffb857cb3ab299c52728808f`.
+- Unit tests: 96/96 pass.
+- Submission audit: exit status 2, every machine-verifiable check PASS, with
+  `author identity` as the sole blocker.
 
-From `C:\Users\lun\Papers\gguf-perf`:
+Replace `Author Name`, `Affiliation`, and `author@example.com` with verified
+details, then rebuild and rerun the audit. ICASSP 2027 is non-blind; never
+invent them.
 
-```powershell
-.\.venv\Scripts\python.exe -m llmperf.analyze
-.\.venv\Scripts\python.exe -m llmperf.refine
-.\.venv\Scripts\python.exe -m llmperf.figures
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe paper\icassp2027\audit_submission.py
-git diff --check
+Regenerate derived artifacts from the repository root with:
+
+```bash
+.venv/bin/python -m llmperf.analyze
+.venv/bin/python -m llmperf.refine
+.venv/bin/python paper/icassp2027/generate_main_figures.py
+.venv/bin/python paper/icassp2027/generate_supplement.py
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-Build instructions and the local Tectonic command are in
-`paper/icassp2027/README.md`. The analysis does not require another model
-download.
+Do not run `llmperf.campaign`: its generic status writer would replace the
+curated `results/STATUS.md`.
 
-## If the study is extended
+## Guardrails
 
-The highest-value extension is not another uninstrumented resident baseline.
-It is a planned discrete-GPU experiment with physical residency/spill
-telemetry, randomized execution order, additional held-out quantization
-families, and a declared partial-offload grid. Keep every lower-`ngl` row out of
-the current primary fit.
-
-For any new host:
-
-```powershell
-$env:LLMPERF_HOST = 'stable-host-name'
-$env:LLAMA_BENCH = 'C:\path\to\llama-bench.exe'
-.\.venv\Scripts\python.exe -m llmperf.doctor
-.\.venv\Scripts\python.exe -m llmperf.calibrate
-.\.venv\Scripts\python.exe -m llmperf.sweep --dry-run
-```
-
-Do not run a download and benchmark concurrently. Preserve failed rows, raw
-logs, runtime identification, and model hashes; never relabel a prompt-batch
-failure as an out-of-memory failure without direct evidence.
-
-## Known traps with regression guards
-
-1. Resume keys must use the phase-specific values written by `llama-bench`.
-   Guard: `python -m llmperf.sweep --selfcheck`.
-2. Fused MoE tensors such as `ffn_gate_up_exps` must be included in activated
-   parameter accounting.
-3. CSV append must migrate schema before writing new columns.
-4. Windows load gating uses `psutil`; `os.getloadavg()` is unavailable.
-5. Final-protocol row selection is atomic. Never splice favorable fields from
-   different attempts.
-6. Flash attention and F16 K/V must remain pinned; backend-dependent `auto`
-   settings change the experiment.
+1. Keep host results separate; pooled values are not primary claims.
+2. Treat `n_gpu_layers=99` as a request, not physical-residency telemetry.
+3. Make no offload-cliff claim without lower-`ngl` measurements.
+4. Preserve the append-only raw CSVs and frozen manifest/metadata/provenance.
+5. Keep the three Q8 probe exclusions host-specific.
+6. Preserve explicit failures. The MacBook gpt-oss-120B prompt-batch failure
+   was not proven to be out of memory; Studio completed the same file.
+7. Do not filter prefill observations post hoc.
+8. Do not restore the superseded 10.9% Mac headline; the fixed MacBook held-out
+   B2 value is 13.11%.
 
 ## Source of truth
 
 ```text
-llmperf/analyze.py                      fitting and host-separated validation
-llmperf/refine.py                       transfer and rejected extensions
-llmperf/figures.py                      publication figures
-results/measurements_lun-mac.csv        Mac raw measurements
-results/measurements_rtx5080.csv        RTX raw measurements
-results/host_transfer.csv               all-target/test B2 and two-term transfer
-results/STATUS.md                       audited cohort summary
-paper/icassp2027/main.tex               submission manuscript
-paper/icassp2027/generate_supplement.py supplement generator
-SESSION_CHECKPOINT.md                   restart-specific local state
+results/measurements_lun-mac.csv               MacBook raw measurements
+results/measurements_mac-studio-m4-max.csv     Studio raw measurements
+results/measurements_rtx5080.csv               RTX raw measurements
+results/model_manifest.json                    frozen cohort/splits/sizes
+results/model_metadata.json                    frozen GGUF metadata
+results/error_table_by_host.csv                decode headline values
+results/error_table_prefill_by_host.csv        prefill headline values
+results/host_transfer.csv                      all-target/test transfer
+results/STATUS.md                              audited campaign summary
+paper/icassp2027/main.tex                      submission manuscript
+paper/icassp2027/generate_supplement.py        supplement generator
+SESSION_CHECKPOINT.md                          restart-specific state
 ```
 
-The older Markdown manuscripts under `paper/` are working history, not the
-submission source. Do not restore their superseded Mac-only numbers.
+The other Markdown manuscripts under `paper/` are historical working drafts.

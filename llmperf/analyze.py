@@ -33,7 +33,9 @@ BASELINES (a reviewer will demand these)
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -53,6 +55,36 @@ from .common import (FIGURES_DIR, MODELS_DIR, RESULTS_DIR, load_model_metadata,
 # error depend on how many offload points happened to be collected.
 PRIMARY_N_GPU_LAYERS = 99
 PREFILL_FIT_DEPTH = 0
+DECLARED_REPETITIONS = 5
+DECLARED_SETTLE_S = 45.0
+DECLARED_MAX_CV_PCT = 3.0
+DECLARED_DEPTHS = frozenset({0, 4096, 16384})
+DECLARED_N_BATCH = 2048
+DECLARED_N_UBATCH = 512
+_QUALITY_BOOKKEEPING_FIELDS = (
+    "load_before", "load_after", "attempts", "kept_cv_pct", "max_cv_pct",
+)
+_PROTOCOL_DECLARATION_FIELDS = (
+    "repetitions", "settle_s", "max_cv_pct", "n_depth", "n_prompt", "n_gen",
+    "flash_attn", "type_k", "type_v", "n_batch", "n_ubatch",
+)
+
+# Diagnostic plots are not publication figures, but host identity still needs
+# a stable visual encoding.  In particular, inserting the Studio between the
+# alphabetically sorted MacBook and RTX IDs must not silently change the RTX
+# colour.  Unknown future hosts get a deterministic fallback rather than a
+# position-dependent colour.
+DIAGNOSTIC_HOST_STYLES = {
+    "lun-mac": {"color": "#2a78d6", "marker": "o", "linestyle": "-"},
+    "rtx5080": {"color": "#eb6834", "marker": "s", "linestyle": "--"},
+    "mac-studio-m4-max": {
+        "color": "#1baf7a", "marker": "D", "linestyle": "-."
+    },
+}
+_FALLBACK_HOST_COLOURS = ("#eda100", "#e87ba4", "#008300")
+_FALLBACK_HOST_MARKERS = ("^", "v", "P", "X", "*")
+_FALLBACK_HOST_LINES = (":", (0, (3, 1, 1, 1)), (0, (5, 2)))
+_HOST_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 plt.rcParams.update({
     "figure.dpi": 140, "savefig.dpi": 200, "font.size": 9,
@@ -65,18 +97,206 @@ plt.rcParams.update({
 # loading
 # --------------------------------------------------------------------------
 
-def load_measurements(results_dir: Path) -> pd.DataFrame:
+def diagnostic_host_style(host: str) -> dict:
+    """Return a stable style for a known or future host ID."""
+    host = str(host)
+    if host in DIAGNOSTIC_HOST_STYLES:
+        return DIAGNOSTIC_HOST_STYLES[host]
+    digest = hashlib.sha256(host.encode("utf-8")).digest()
+    return {
+        "color": _FALLBACK_HOST_COLOURS[digest[0] % len(_FALLBACK_HOST_COLOURS)],
+        "marker": _FALLBACK_HOST_MARKERS[digest[1] % len(_FALLBACK_HOST_MARKERS)],
+        "linestyle": _FALLBACK_HOST_LINES[digest[2] % len(_FALLBACK_HOST_LINES)],
+    }
+
+
+def _validate_host_id(value, source: str) -> str:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError(f"missing or malformed host ID in {source}: {value!r}")
+    if not _HOST_ID_RE.fullmatch(value):
+        raise ValueError(
+            f"malformed host ID in {source}: {value!r}; use only letters, "
+            "digits, dot, underscore, and hyphen")
+    return value
+
+
+def _filename_host_id(path: Path, prefix: str, suffix: str) -> str:
+    name = path.name
+    if not name.startswith(prefix) or not name.endswith(suffix):
+        raise ValueError(f"unexpected result filename: {path}")
+    return _validate_host_id(name[len(prefix):-len(suffix)], str(path))
+
+
+def _numeric_column(df: pd.DataFrame, name: str) -> pd.Series:
+    if name not in df.columns:
+        return pd.Series(np.nan, index=df.index, dtype=float)
+    return pd.to_numeric(df[name], errors="coerce")
+
+
+def declared_protocol_mask(df: pd.DataFrame) -> pd.Series:
+    """Rows produced with every setting in the declared measurement protocol.
+
+    Merely having retry/load bookkeeping is not sufficient.  This predicate is
+    deliberately exact so a quick exploratory run cannot enter a paper cohort
+    just because it has a low CV or a newer timestamp.
+    """
+    numeric = {name: _numeric_column(df, name) for name in (
+        "repetitions", "settle_s", "max_cv_pct", "n_gpu_layers", "n_depth",
+        "n_prompt", "n_gen", "n_batch", "n_ubatch", "load_before",
+        "load_after", "attempts", "kept_cv_pct",
+    )}
+    text = {
+        name: (df[name].astype("string").str.strip().str.lower()
+               if name in df.columns else
+               pd.Series(pd.NA, index=df.index, dtype="string"))
+        for name in ("flash_attn", "type_k", "type_v")
+    }
+
+    bookkeeping = pd.Series(True, index=df.index, dtype=bool)
+    for name in _QUALITY_BOOKKEEPING_FIELDS:
+        bookkeeping &= np.isfinite(numeric[name])
+    bookkeeping &= numeric["attempts"].ge(1)
+    bookkeeping &= numeric["attempts"].eq(numeric["attempts"].round())
+    bookkeeping &= numeric["kept_cv_pct"].ge(0)
+
+    prefill = numeric["n_prompt"].eq(512) & numeric["n_gen"].eq(0)
+    decode = numeric["n_prompt"].eq(0) & numeric["n_gen"].eq(128)
+    flash_on = text["flash_attn"].isin(
+        {"1", "1.0", "true", "on", "yes"})
+
+    return (bookkeeping
+            & numeric["repetitions"].eq(DECLARED_REPETITIONS)
+            & numeric["settle_s"].eq(DECLARED_SETTLE_S)
+            & numeric["max_cv_pct"].eq(DECLARED_MAX_CV_PCT)
+            & numeric["n_gpu_layers"].eq(PRIMARY_N_GPU_LAYERS)
+            & numeric["n_depth"].isin(DECLARED_DEPTHS)
+            & flash_on
+            & text["type_k"].eq("f16")
+            & text["type_v"].eq("f16")
+            & numeric["n_batch"].eq(DECLARED_N_BATCH)
+            & numeric["n_ubatch"].eq(DECLARED_N_UBATCH)
+            & (prefill | decode)).fillna(False).astype(bool)
+
+
+def legacy_protocol_mask(df: pd.DataFrame) -> pd.Series:
+    """Rows predating quality bookkeeping, eligible only as a last fallback."""
+    present = [name for name in _QUALITY_BOOKKEEPING_FIELDS
+               if name in df.columns]
+    if not present:
+        return pd.Series(True, index=df.index, dtype=bool)
+    # Any populated quality-control field means this was a protocol-aware run;
+    # if its settings are wrong it must not masquerade as legacy data.
+    return df[present].isna().all(axis=1)
+
+
+def validate_host_coverage(df: pd.DataFrame, cal: dict,
+                           require_exact: bool = True) -> None:
+    """Fail closed unless measurement and calibration host IDs agree.
+
+    ``require_exact=False`` supports callers intentionally operating on a
+    measurement subset with a superset of calibrations.  Even then, every
+    measured host must have exactly identified calibration data.
+    """
+    if "host" not in df.columns:
+        raise ValueError("measurements have no host column")
+    if df.empty:
+        raise ValueError("measurements contain no rows; host coverage is unknown")
+
+    measured = set()
+    for value in df["host"].drop_duplicates().tolist():
+        measured.add(_validate_host_id(value, "measurement rows"))
+
+    calibrated = set()
+    for key, value in cal.items():
+        host = _validate_host_id(key, "calibration mapping key")
+        if not isinstance(value, dict):
+            raise ValueError(f"calibration for {host!r} is not a JSON object")
+        embedded = _validate_host_id(value.get("host"),
+                                     f"calibration payload for {host!r}")
+        if embedded != host:
+            raise ValueError(
+                f"calibration host mismatch: mapping key {host!r}, "
+                f"payload host {embedded!r}")
+        calibrated.add(host)
+
+    missing_cal = sorted(measured - calibrated)
+    missing_measurements = sorted(calibrated - measured) if require_exact else []
+    if missing_cal or missing_measurements:
+        details = []
+        if missing_cal:
+            details.append("missing calibration for " + ", ".join(missing_cal))
+        if missing_measurements:
+            details.append("missing measurements for " +
+                           ", ".join(missing_measurements))
+        raise ValueError("measurement/calibration host ID mismatch: " +
+                         "; ".join(details))
+
+
+def load_measurements(results_dir: Path, *, deduplicate: bool = True) -> pd.DataFrame:
+    """Load successful measurements, optionally retaining repeated cells.
+
+    Analysis uses the default quality-aware deduplication.  The opt-out exists
+    for diagnostics such as ``refine --keep-all`` that explicitly need every
+    recorded observation; it does not change publication defaults.
+    """
     files = sorted(results_dir.glob("measurements_*.csv"))
     if not files:
         raise SystemExit(f"No measurements_*.csv in {results_dir}. "
                          f"Run `python -m llmperf.sweep` first.")
-    df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    frames = []
+    origins: dict[str, Path] = {}
+    problems = []
+    for f in files:
+        try:
+            filename_host = _filename_host_id(f, "measurements_", ".csv")
+        except ValueError as e:
+            problems.append(str(e))
+            continue
+        frame = pd.read_csv(f)
+        frames.append(frame)
+        if "host" not in frame.columns:
+            problems.append(f"{f}: missing host column")
+            continue
+        if frame.empty:
+            problems.append(f"{f}: no rows, so its host ID cannot be verified")
+            continue
+
+        row_hosts = set()
+        for value in frame["host"].drop_duplicates().tolist():
+            try:
+                row_hosts.add(_validate_host_id(value, f"{f} host column"))
+            except ValueError as e:
+                problems.append(str(e))
+        if row_hosts != {filename_host}:
+            problems.append(
+                f"measurement host mismatch in {f}: filename declares "
+                f"{filename_host!r}, rows declare {sorted(row_hosts)!r}")
+        for host in row_hosts:
+            if host in origins and origins[host] != f:
+                problems.append(
+                    f"duplicate measurement host ID {host!r} in "
+                    f"{origins[host]} and {f}")
+            else:
+                origins[host] = f
+
+    if problems:
+        raise ValueError("invalid measurement host provenance:\n- " +
+                         "\n- ".join(problems))
+
+    df = pd.concat(frames, ignore_index=True)
     df = df[df["error"].isna() | (df["error"].astype(str).str.len() == 0)]
     for c in ("avg_ts", "stddev_ts", "file_bytes", "n_params", "n_active_params",
               "n_layers", "n_kv_heads", "head_dim", "n_depth", "n_prompt",
-              "n_gen", "n_gpu_layers", "n_expert"):
-        df[c] = pd.to_numeric(df[c], errors="coerce")
+              "n_gen", "n_gpu_layers", "n_expert", "n_batch", "n_ubatch",
+              "settle_s", "repetitions", "load_before", "load_after",
+              "attempts", "kept_cv_pct", "max_cv_pct"):
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
     df = df.dropna(subset=["avg_ts"])
+
+    # This column is recomputed from the raw protocol fields on every load.  A
+    # stale or hand-edited quality_protocol column in a CSV is never trusted.
+    df["quality_protocol"] = declared_protocol_mask(df)
 
     # A cell may be measured more than once. Prefer rows produced by the full
     # quality-gated protocol, then keep the best attempt inside that protocol.
@@ -88,17 +308,10 @@ def load_measurements(results_dir: Path) -> pd.DataFrame:
     # GroupBy.first() chooses the first *non-null value in each column*, which
     # can splice timestamp/throughput from a legacy row together with load and
     # retry metadata from a later row that was never actually selected.
-    if "timestamp" in df.columns:
+    if deduplicate and "timestamp" in df.columns:
         before = len(df)
         df = df.copy()
-        protocol_fields = [
-            "load_before", "load_after", "attempts", "kept_cv_pct",
-            "max_cv_pct",
-        ]
-        if all(c in df.columns for c in protocol_fields):
-            df["quality_protocol"] = df[protocol_fields].notna().all(axis=1)
-        else:
-            df["quality_protocol"] = False
+        df["_legacy_protocol"] = legacy_protocol_mask(df)
         kept_cv = (df["kept_cv_pct"] if "kept_cv_pct" in df.columns
                    else pd.Series(np.nan, index=df.index))
         df["_cv"] = pd.to_numeric(kept_cv, errors="coerce")
@@ -113,10 +326,12 @@ def load_measurements(results_dir: Path) -> pd.DataFrame:
         keys = ["host", "model_file", "n_gpu_layers", "n_depth",
                 "n_prompt", "n_gen"]
         df = (df.sort_values(
-                    ["quality_protocol", "_cv", "_load", "timestamp"],
-                    ascending=[False, True, True, False])
+                    ["quality_protocol", "_legacy_protocol", "_cv", "_load",
+                     "timestamp"],
+                    ascending=[False, False, True, True, False])
                 .drop_duplicates(keys, keep="first")
-                .drop(columns=["_cv", "_load"], errors="ignore"))
+                .drop(columns=["_legacy_protocol", "_cv", "_load"],
+                      errors="ignore"))
         if len(df) < before:
             n_protocol = int(df["quality_protocol"].sum())
             print(f"deduplicated {before - len(df)} re-measured row(s); "
@@ -127,9 +342,37 @@ def load_measurements(results_dir: Path) -> pd.DataFrame:
 
 def load_calibration(results_dir: Path) -> dict:
     out = {}
-    for f in results_dir.glob("calibration_*.json"):
+    origins: dict[str, Path] = {}
+    problems = []
+    for f in sorted(results_dir.glob("calibration_*.json")):
+        try:
+            filename_host = _filename_host_id(f, "calibration_", ".json")
+        except ValueError as e:
+            problems.append(str(e))
+            continue
         c = json.loads(f.read_text(encoding="utf-8"))
-        out[c["host"]] = c
+        if not isinstance(c, dict):
+            problems.append(f"{f}: calibration must be a JSON object")
+            continue
+        try:
+            host = _validate_host_id(c.get("host"), f"{f} host field")
+        except ValueError as e:
+            problems.append(str(e))
+            continue
+        if host != filename_host:
+            problems.append(
+                f"calibration host mismatch in {f}: filename declares "
+                f"{filename_host!r}, payload declares {host!r}")
+        if host in origins:
+            problems.append(
+                f"duplicate calibration host ID {host!r} in "
+                f"{origins[host]} and {f}")
+        else:
+            origins[host] = f
+            out[host] = c
+    if problems:
+        raise ValueError("invalid calibration host provenance:\n- " +
+                         "\n- ".join(problems))
     return out
 
 
@@ -189,12 +432,26 @@ def select_primary_measurements(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("measurements have no n_gpu_layers column")
     ngl = pd.to_numeric(df["n_gpu_layers"], errors="coerce")
     eligible = ngl == PRIMARY_N_GPU_LAYERS
-    # Once a dataset contains rows from the declared load/CV-gated protocol,
-    # legacy rows are excluded from headline fits rather than mixed into the
-    # cohort. A fully legacy dataset remains analysable, but must not be
-    # described as quality-gated.
-    if "quality_protocol" in df.columns and df["quality_protocol"].any():
-        eligible &= df["quality_protocol"].fillna(False).astype(bool)
+    # Once a dataset contains rows from the exact declared protocol, neither
+    # legacy nor explicitly wrong-protocol rows may enter headline fits.  A
+    # wholly old dataset remains analysable, but only genuinely legacy rows
+    # (with no quality-control bookkeeping) receive that fallback.
+    has_raw_protocol = any(name in df.columns
+                           for name in _PROTOCOL_DECLARATION_FIELDS)
+    if has_raw_protocol:
+        # Do not trust a caller-supplied flag when the source fields are here:
+        # recompute so hand-edited/stale derived columns cannot bypass checks.
+        strict = declared_protocol_mask(df)
+    elif "quality_protocol" in df.columns:
+        # Compatibility for small in-memory callers that carry only the
+        # already-derived flag rather than raw measurement columns.
+        strict = df["quality_protocol"].fillna(False).astype(bool)
+    else:
+        strict = pd.Series(False, index=df.index, dtype=bool)
+    if strict.any():
+        eligible &= strict
+    elif has_raw_protocol or "quality_protocol" in df.columns:
+        eligible &= legacy_protocol_mask(df)
     return df[eligible].copy()
 
 
@@ -202,9 +459,9 @@ def bandwidth_for(cal: dict) -> tuple[float, str]:
     """Pick the calibration bandwidth term, honouring the platform caveat.
 
     On Apple Silicon the CPU triad cannot saturate the fabric the GPU reaches,
-    so using it would systematically under-predict. The LLM reference probe
-    goes through the same code path being predicted and is the honest choice
-    there. On a discrete GPU the device copy bandwidth is the right term.
+    so using it would systematically under-predict. Prefer the accelerator
+    device-copy result on both MPS and CUDA; use the LLM reference as a
+    diagnostic fallback when no such microbenchmark is available.
     """
     gpu = cal.get("torch_gpu") or {}
     if gpu.get("available") and gpu.get("copy_gb_s"):
@@ -355,6 +612,11 @@ def add_features(df: pd.DataFrame, cal: dict, splits: dict,
                  metadata: dict[str, dict] | None = None,
                  models_dir: Path = MODELS_DIR,
                  prefer_live: bool = True) -> pd.DataFrame:
+    # Library callers may deliberately pass a row subset, so extra calibration
+    # records are allowed here.  Missing calibration for any represented host
+    # is never allowed: otherwise those rows quietly receive NaN ceilings and
+    # disappear from downstream scoring.
+    validate_host_coverage(df, cal, require_exact=False)
     metadata = metadata or {}
     df = refresh_metadata(df, models_dir, metadata, prefer_live=prefer_live)
     df = resolve_splits(df, splits)
@@ -420,6 +682,32 @@ def fit_eta(train: pd.DataFrame, bytes_col: str) -> pd.Series:
     """
     eta = train["avg_ts"] * train[bytes_col] / train["bw"]
     return eta.groupby([train["host"], train["quant"]]).median()
+
+
+def validate_host_training_coverage(
+        df: pd.DataFrame, expected_hosts=None, *, context: str = "fitting cohort") -> None:
+    """Require at least one TRAIN row for every host in a host-adapted fit.
+
+    This is deliberately separate from ``fit_eta`` and ``apply_eta``. Library
+    callers use those helpers for transfer experiments and intentional row
+    subsets, where the unseen-host/quant fallback is meaningful. Publication
+    entry points call this guard after excluding calibration probes so a partial
+    host cannot be presented as locally fitted when it actually used a global
+    fallback.
+    """
+    missing_columns = sorted({"host", "split"} - set(df.columns))
+    if missing_columns:
+        raise ValueError(
+            f"{context} lacks required column(s): {', '.join(missing_columns)}")
+    represented = ({str(host) for host in expected_hosts}
+                   if expected_hosts is not None else
+                   set(df["host"].dropna().astype(str)))
+    trained = set(df.loc[df["split"].eq("train"), "host"].dropna().astype(str))
+    missing = sorted(represented - trained)
+    if missing:
+        raise ValueError(
+            f"{context} has no TRAIN rows after calibration-probe/protocol "
+            f"exclusion for host(s): {', '.join(missing)}")
 
 
 def apply_eta(df: pd.DataFrame, eta: pd.Series, bytes_col: str) -> np.ndarray:
@@ -616,7 +904,9 @@ def fig_eta(df, bytes_col, out: Path):
     width = 0.8 / max(1, len(hosts))
     for i, h in enumerate(hosts):
         vals = [d[(d.host == h) & (d["quant"] == q)]["eta"].median() for q in order]
-        ax.bar(np.arange(len(order)) + i * width, vals, width, label=h)
+        style = diagnostic_host_style(h)
+        ax.bar(np.arange(len(order)) + i * width, vals, width, label=h,
+               color=style["color"])
     ax.set_xticks(np.arange(len(order)) + width * (len(hosts) - 1) / 2)
     ax.set_xticklabels(order, rotation=30, ha="right")
     ax.set_ylabel(r"efficiency $\eta$  (fraction of roofline)")
@@ -631,18 +921,20 @@ def fig_context(df, pred, out: Path):
     if d["n_depth"].nunique() < 2:
         return False
     fig, ax = plt.subplots(figsize=(5.4, 4.0))
-    for name, g in d.groupby("model_name"):
+    for (host, name), g in d.groupby(["host", "model_name"]):
         g = g.sort_values("n_depth")
-        if len(g) < 2:
+        if g["n_depth"].nunique() < 2:
             continue
-        line, = ax.plot(g["n_depth"], g["avg_ts"], "o-", ms=4, lw=1.4,
-                        label=name[:26])
-        ax.plot(g["n_depth"], g["pred"], "--", lw=1, alpha=.7,
-                color=line.get_color())
+        style = diagnostic_host_style(host)
+        ax.plot(g["n_depth"], g["avg_ts"], marker=style["marker"],
+                ls=style["linestyle"], ms=4, lw=1.4,
+                color=style["color"], label=f"{host}: {name[:22]}")
+        ax.plot(g["n_depth"], g["pred"], ":", lw=1, alpha=.7,
+                color=style["color"])
     ax.set_xlabel("KV-cache depth (tokens)")
     ax.set_ylabel("decode throughput (tok/s)")
     ax.set_yscale("log")
-    ax.set_title("Throughput decay with context\n(solid: measured, dashed: predicted)")
+    ax.set_title("Throughput decay with context\n(host-styled: measured, dotted: predicted)")
     ax.legend(fontsize=6, ncol=2)
     fig.savefig(out); plt.close(fig)
     return True
@@ -653,7 +945,13 @@ def fig_moe(df, preds, out: Path):
     if not df["is_moe"].any():
         return False
     fig, ax = plt.subplots(figsize=(5.2, 3.6))
-    groups = [("dense", ~df["is_moe"].to_numpy()), ("MoE", df["is_moe"].to_numpy())]
+    groups = []
+    for host in sorted(df["host"].unique()):
+        for is_moe, label in ((False, "dense"), (True, "MoE")):
+            mask = ((df["host"] == host) &
+                    (df["is_moe"] == is_moe)).to_numpy()
+            if mask.any():
+                groups.append((f"{host}\n{label}", mask))
     names = list(preds)
     width = 0.8 / len(names)
     for i, name in enumerate(names):
@@ -676,12 +974,15 @@ def fig_offload(df, out: Path):
     if d["n_gpu_layers"].nunique() < 3:
         return False
     fig, ax = plt.subplots(figsize=(5.2, 3.8))
-    for name, g in d.groupby("model_name"):
+    for (host, name), g in d.groupby(["host", "model_name"]):
         if g["n_gpu_layers"].nunique() < 3:
             continue
         g = g.sort_values("n_gpu_layers")
         frac = np.minimum(g["n_gpu_layers"] / g["n_layers"], 1.0)
-        ax.plot(frac * 100, g["avg_ts"], "o-", ms=4, lw=1.4, label=name[:26])
+        style = diagnostic_host_style(host)
+        ax.plot(frac * 100, g["avg_ts"], marker=style["marker"],
+                ls=style["linestyle"], ms=4, lw=1.4,
+                color=style["color"], label=f"{host}: {name[:22]}")
     ax.set_xlabel("% of layers resident on GPU")
     ax.set_ylabel("decode throughput (tok/s)")
     ax.set_yscale("log")
@@ -711,10 +1012,16 @@ def main(argv=None) -> int:
     if not cal:
         raise SystemExit(f"No calibration_*.json in {args.results}. "
                          f"Run `python -m llmperf.calibrate` first.")
+    validate_host_coverage(df, cal)
     splits = load_splits(args.models_dir, args.results)
     metadata = load_model_metadata(args.results)
-    df = add_features(df, cal, splits, metadata, args.models_dir)
+    # These CSVs are publication artifacts. Their values must be determined by
+    # the audited snapshot, not by whichever same-named GGUFs happen to be
+    # installed on the machine doing the regeneration.
+    df = add_features(df, cal, splits, metadata, args.models_dir,
+                      prefer_live=False)
     args.figures.mkdir(parents=True, exist_ok=True)
+    expected_hosts = set(cal)
 
     for host, c in cal.items():
         bw, bw_src = bandwidth_for(c)
@@ -747,11 +1054,9 @@ def main(argv=None) -> int:
             "Every decode row is the calibration probe. Download more models "
             "(`python -m llmperf.fetch --set all`) before analysing.")
 
+    validate_host_training_coverage(
+        dec, expected_hosts, context="decode host-adapted fit")
     train = dec[dec["split"] == "train"]
-    if train.empty:
-        print("WARNING: no TRAIN rows; fitting on everything. Reported test "
-              "error would not be out-of-sample.", file=sys.stderr)
-        train = dec
 
     eta_active = fit_eta(train, "bytes_active")
     eta_total = fit_eta(train, "bytes_total")
@@ -774,7 +1079,16 @@ def main(argv=None) -> int:
         print(host_tbl.round(1).to_string(index=False))
 
     primary = select_primary_measurements(df)
-    pf, pf_err = evaluate_prefill(primary[~primary["is_calibration_probe"]])
+    prefill_input = primary[~primary["is_calibration_probe"]].copy()
+    prefill_fit_rows = prefill_input[
+        prefill_input["phase"].eq("prefill")
+        & prefill_input["flops"].notna()
+        & prefill_input["n_active_params"].gt(0)
+        & prefill_input["n_depth"].eq(PREFILL_FIT_DEPTH)
+    ]
+    validate_host_training_coverage(
+        prefill_fit_rows, expected_hosts, context="prefill host-adapted fit")
+    pf, pf_err = evaluate_prefill(prefill_input)
     if not pf_err.empty:
         print(f"\n=== prefill at empty cache (n_depth={PREFILL_FIT_DEPTH}) ===")
         print(pf_err.round(1).to_string(index=False))

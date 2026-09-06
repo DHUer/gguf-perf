@@ -1,7 +1,7 @@
 model,split,n,MAPE_%,median_APE_%,p90_APE_%,max_APE_%
-"B0 unfitted (eta=1, total)",train,81,27.66,16.26,73.73,123.27
-"B0 unfitted (eta=1, total)",test,18,45.15,48.6,83.31,84.22
-"B1 fitted, total params",train,81,13.16,6.19,30.59,76.77
-"B1 fitted, total params",test,18,50.19,54.66,83.09,85.11
-"B2 fitted, active params (ours)",train,81,10.27,5.86,25.07,78.49
-"B2 fitted, active params (ours)",test,18,20.79,15.5,51.7,68.96
+"B0 unfitted (eta=1, total)",train,126,29.55,16.96,73.82,125.41
+"B0 unfitted (eta=1, total)",test,33,50.98,78.3,84.08,92.67
+"B1 fitted, total params",train,126,14.8,6.23,52.65,76.77
+"B1 fitted, total params",test,33,52.49,72.08,81.88,85.11
+"B2 fitted, active params (ours)",train,126,11.03,6.24,26.26,78.49
+"B2 fitted, active params (ours)",test,33,17.87,11.54,48.6,68.96

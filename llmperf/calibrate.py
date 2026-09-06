@@ -12,12 +12,11 @@ the paper needs to report which one actually predicts best:
                UNDER-reports what the GPU can reach: unified memory is shared,
                but CPU cores cannot saturate the fabric that the GPU can. Do not
                use this as "the" bandwidth on Metal machines.
-  torch_gpu    Real device bandwidth and FLOPS, only available where torch sees
-               a CUDA device. This is the honest number on the discrete GPU.
-  llm_ref      Effective decode bandwidth back-solved from ONE llama-bench run
-               on the smallest model. One-point calibration; portable to every
-               backend because it goes through the same code path being
-               predicted.
+  torch_gpu    Real device bandwidth and FLOPS where torch sees CUDA or Metal
+               MPS. This is the preferred hardware calibration for either GPU.
+  llm_ref      Effective decode bandwidth back-solved from llama-bench probes.
+               It is a diagnostic and a fallback when no accelerator copy
+               benchmark is available, not the primary device-bandwidth value.
 
 Reporting all three, and being explicit that cpu_triad is not valid on Metal,
 is the difference between a measurement paper and a misleading one.
@@ -274,7 +273,7 @@ def main(argv=None) -> int:
     flops = bench_matmul_flops(args.matmul_n)
     print(f"{flops['gflops']:.0f} GFLOP/s")
 
-    print("  gpu (torch/cuda)             ... ", end="", flush=True)
+    print("  gpu (torch accelerator)      ... ", end="", flush=True)
     gpu = bench_torch_gpu()
     print(f"{gpu['copy_gb_s']:.0f} GB/s, {gpu['fp16_tflops']:.1f} TFLOPS ({gpu['name']})"
           if gpu.get("available") else f"n/a ({gpu.get('reason')})")
@@ -299,8 +298,9 @@ def main(argv=None) -> int:
         "caveats": {
             "cpu_triad_valid_for_gpu": not is_metal,
             "note": ("On Apple Silicon the CPU triad under-reports the bandwidth "
-                     "the GPU can reach through unified memory; use llm_ref as "
-                     "the bandwidth term on this machine.")
+                     "the GPU can reach through unified memory; use the MPS "
+                     "device-copy result when available and llm_ref only as a "
+                     "diagnostic or fallback.")
             if is_metal else
             ("On a discrete GPU the CPU triad measures host RAM, which is the "
              "relevant term only for offloaded layers; use torch_gpu for "

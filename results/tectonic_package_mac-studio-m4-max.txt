@@ -1,0 +1,11 @@
+version: 0.17.0
+tag: tectonic@0.17.0
+tag_object: 7141d67aba85eb1cf38a769eac0b1bb2180c51d7
+source_commit: 8c0126a9653239a2e6e0a5274af9b8510f643030
+asset: tectonic-0.17.0-aarch64-apple-darwin.tar.gz
+asset_size_bytes: 21704674
+asset_sha256: a3f1cac7c5678f01661a92212f58480ae3b0634115d880dbc59e2953ded45667
+asset_url: https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-aarch64-apple-darwin.tar.gz
+binary: /Users/lun/.local/share/gguf-perf/tectonic-0.17.0/tectonic
+binary_sha256: b52b5a730e2b0b33087304f7720f649603953f270a6b1c88bb031e1ae01f7f9c
+

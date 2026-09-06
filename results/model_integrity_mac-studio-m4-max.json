@@ -1,0 +1,684 @@
+{
+  "errors": [],
+  "expected_bytes": 336367242336,
+  "expected_count": 23,
+  "files": {
+    "Muse-Glimmer-30B-UD-Q4_K_XL.gguf": {
+      "actual_sha256": "82bece304887a313ece08400bc030f6066c7bff5b906b0cd40308ec8a409fd38",
+      "elapsed_seconds": 15.541,
+      "expected_sha256": "82bece304887a313ece08400bc030f6066c7bff5b906b0cd40308ec8a409fd38",
+      "header_ok": true,
+      "metadata": {
+        "arch": "muse-glimmer",
+        "d_model": 6656,
+        "file_bytes": 15878222368,
+        "head_dim": 128,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 872415232,
+          "4096": 218103808
+        },
+        "n_active_params": 27854794240,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 2,
+        "n_layers": 52,
+        "n_params": 27854794240,
+        "quant": "Q4_K",
+        "vocab_size": 202048
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 15878222368
+    },
+    "NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf": {
+      "actual_sha256": "083af225449463dd7c38bebc888f9dcad187b834d8b15e08c297dda37c968b50",
+      "elapsed_seconds": 7.159,
+      "expected_sha256": "083af225449463dd7c38bebc888f9dcad187b834d8b15e08c297dda37c968b50",
+      "header_ok": true,
+      "metadata": {
+        "arch": "nemotron_h",
+        "d_model": 3136,
+        "file_bytes": 2837072896,
+        "head_dim": 128,
+        "kv_bytes_by_depth": {
+          "0": 616366080,
+          "16384": 884801536,
+          "4096": 683474944
+        },
+        "n_active_params": 3973556832,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 8,
+        "n_layers": 42,
+        "n_params": 3973556832,
+        "quant": "Q4_K_M",
+        "vocab_size": 131072
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 2837072896
+    },
+    "Nemotron-3-Nano-30B-A3B-Q4_K_M.gguf": {
+      "actual_sha256": "0e7f6e51fdd9039928749d07eed9e846dbfd97681646544c5406bcdd788e5940",
+      "elapsed_seconds": 15.124,
+      "expected_sha256": "0e7f6e51fdd9039928749d07eed9e846dbfd97681646544c5406bcdd788e5940",
+      "header_ok": true,
+      "metadata": {
+        "arch": "nemotron_h_moe",
+        "d_model": 2688,
+        "file_bytes": 24574373664,
+        "head_dim": 128,
+        "kv_bytes_by_depth": {
+          "0": 397934592,
+          "16384": 498597888,
+          "4096": 423100416
+        },
+        "n_active_params": 3580076352,
+        "n_expert": 128,
+        "n_expert_used": 6,
+        "n_kv_heads": 2,
+        "n_layers": 52,
+        "n_params": 31577940288,
+        "quant": "Q4_K_M",
+        "vocab_size": 131072
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 24574373664
+    },
+    "Qwen3.5-4B-Q4_K_M.gguf": {
+      "actual_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+      "elapsed_seconds": 8.954,
+      "expected_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 2560,
+        "file_bytes": 2740937888,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 2147483648,
+          "4096": 536870912
+        },
+        "n_active_params": 4205751296,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 32,
+        "n_params": 4205751296,
+        "quant": "Q4_K_M",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 2740937888
+    },
+    "Qwen3.5-4B-Q8_0.gguf": {
+      "actual_sha256": "10cc391b403021dd11c614679d2fd92f611c3681d29e29651b717316965d61e1",
+      "elapsed_seconds": 9.611,
+      "expected_sha256": "10cc391b403021dd11c614679d2fd92f611c3681d29e29651b717316965d61e1",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 2560,
+        "file_bytes": 4482403488,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 2147483648,
+          "4096": 536870912
+        },
+        "n_active_params": 4205751296,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 32,
+        "n_params": 4205751296,
+        "quant": "Q8_0",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 4482403488
+    },
+    "Qwen3.5-9B-Q4_K_M.gguf": {
+      "actual_sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "elapsed_seconds": 10.209,
+      "expected_sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 4096,
+        "file_bytes": 5680522464,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 2147483648,
+          "4096": 536870912
+        },
+        "n_active_params": 8953803264,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 32,
+        "n_params": 8953803264,
+        "quant": "Q4_K_M",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 5680522464
+    },
+    "Qwen3.5-9B-Q8_0.gguf": {
+      "actual_sha256": "809626574d0cb43d4becfa56169980da2bb448f2299270f7be443cb89d0a6ae4",
+      "elapsed_seconds": 11.671,
+      "expected_sha256": "809626574d0cb43d4becfa56169980da2bb448f2299270f7be443cb89d0a6ae4",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 4096,
+        "file_bytes": 9527502048,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 2147483648,
+          "4096": 536870912
+        },
+        "n_active_params": 8953803264,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 32,
+        "n_params": 8953803264,
+        "quant": "Q8_0",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 9527502048
+    },
+    "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf": {
+      "actual_sha256": "ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+      "elapsed_seconds": 16.283,
+      "expected_sha256": "ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35moe",
+        "d_model": 2048,
+        "file_bytes": 22134528992,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 1342177280,
+          "4096": 335544320
+        },
+        "n_active_params": 3454988928,
+        "n_expert": 256,
+        "n_expert_used": 8,
+        "n_kv_heads": 2,
+        "n_layers": 40,
+        "n_params": 34660610688,
+        "quant": "Q4_K_M",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 22134528992
+    },
+    "Qwen3.8-27B-Q8_0.gguf": {
+      "actual_sha256": "a680f44a06920e5d689774823782006aa3acc8db95750323373b24139b67e348",
+      "elapsed_seconds": 18.718,
+      "expected_sha256": "a680f44a06920e5d689774823782006aa3acc8db95750323373b24139b67e348",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 5120,
+        "file_bytes": 29047086048,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 4362076160,
+          "4096": 1090519040
+        },
+        "n_active_params": 27320697856,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 65,
+        "n_params": 27320697856,
+        "quant": "Q8_0",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 29047086048
+    },
+    "Qwen3.8-27B-UD-IQ2_XXS.gguf": {
+      "actual_sha256": "e792d8fb3142fe6d9171876d6da0f71f05a71028718debc72dbec93ff645e67d",
+      "elapsed_seconds": 10.861,
+      "expected_sha256": "e792d8fb3142fe6d9171876d6da0f71f05a71028718debc72dbec93ff645e67d",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 5120,
+        "file_bytes": 7266070528,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 4294967296,
+          "4096": 1073741824
+        },
+        "n_active_params": 26895998464,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 64,
+        "n_params": 26895998464,
+        "quant": "IQ2_XXS",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 7266070528
+    },
+    "Qwen3.8-27B-UD-IQ3_XXS.gguf": {
+      "actual_sha256": "c0b7c3038681ed2e3040456c1dd45f9858b6c2290bed172c70388a94874f3eee",
+      "elapsed_seconds": 12.267,
+      "expected_sha256": "c0b7c3038681ed2e3040456c1dd45f9858b6c2290bed172c70388a94874f3eee",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 5120,
+        "file_bytes": 10934860704,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 4362076160,
+          "4096": 1090519040
+        },
+        "n_active_params": 27320697856,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 65,
+        "n_params": 27320697856,
+        "quant": "IQ3_XXS",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 10934860704
+    },
+    "Qwen3.8-27B-UD-Q2_K_XL.gguf": {
+      "actual_sha256": "fd4730dd8aad070517978752b63d530aeb1740d2283cab9fa24f1e404032ddb0",
+      "elapsed_seconds": 11.674,
+      "expected_sha256": "fd4730dd8aad070517978752b63d530aeb1740d2283cab9fa24f1e404032ddb0",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 5120,
+        "file_bytes": 9828981664,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 4362076160,
+          "4096": 1090519040
+        },
+        "n_active_params": 27320697856,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 65,
+        "n_params": 27320697856,
+        "quant": "Q2_K",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 9828981664
+    },
+    "Qwen3.8-27B-UD-Q3_K_XL.gguf": {
+      "actual_sha256": "8c2a45ff85e7674ca185ec8eb6cdeab0e617ed9d8018caed0b64380eb2a67a5e",
+      "elapsed_seconds": 12.992,
+      "expected_sha256": "8c2a45ff85e7674ca185ec8eb6cdeab0e617ed9d8018caed0b64380eb2a67a5e",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 5120,
+        "file_bytes": 13146393504,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 4362076160,
+          "4096": 1090519040
+        },
+        "n_active_params": 27320697856,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 65,
+        "n_params": 27320697856,
+        "quant": "Q3_K",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 13146393504
+    },
+    "Qwen3.8-27B-UD-Q4_K_XL.gguf": {
+      "actual_sha256": "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e",
+      "elapsed_seconds": 14.699,
+      "expected_sha256": "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 5120,
+        "file_bytes": 17559178144,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 4362076160,
+          "4096": 1090519040
+        },
+        "n_active_params": 27320697856,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 65,
+        "n_params": 27320697856,
+        "quant": "Q4_K",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 17559178144
+    },
+    "Qwen3.8-27B-UD-Q5_K_XL.gguf": {
+      "actual_sha256": "8601193d3d5760c37fb8ce1b43afebc69df5fb24e1fbc5a547c32e2200305276",
+      "elapsed_seconds": 16.131,
+      "expected_sha256": "8601193d3d5760c37fb8ce1b43afebc69df5fb24e1fbc5a547c32e2200305276",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 5120,
+        "file_bytes": 20876938144,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 4362076160,
+          "4096": 1090519040
+        },
+        "n_active_params": 27320697856,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 65,
+        "n_params": 27320697856,
+        "quant": "Q5_K",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 20876938144
+    },
+    "Qwen3.8-27B-UD-Q6_K_XL.gguf": {
+      "actual_sha256": "701d8fa9ed214ab21bfc130cd2a7df19ca89bbef7713e2dfb19f3c63696aa917",
+      "elapsed_seconds": 17.427,
+      "expected_sha256": "701d8fa9ed214ab21bfc130cd2a7df19ca89bbef7713e2dfb19f3c63696aa917",
+      "header_ok": true,
+      "metadata": {
+        "arch": "qwen35",
+        "d_model": 5120,
+        "file_bytes": 25299061664,
+        "head_dim": 256,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 4362076160,
+          "4096": 1090519040
+        },
+        "n_active_params": 27320697856,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 65,
+        "n_params": 27320697856,
+        "quant": "Q6_K",
+        "vocab_size": 248320
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 25299061664
+    },
+    "SmolLM3-Q4_K_M.gguf": {
+      "actual_sha256": "8334b850b7bd46238c16b0c550df2138f0889bf433809008cc17a8b05761863e",
+      "elapsed_seconds": 6.97,
+      "expected_sha256": "8334b850b7bd46238c16b0c550df2138f0889bf433809008cc17a8b05761863e",
+      "header_ok": true,
+      "metadata": {
+        "arch": "smollm3",
+        "d_model": 2048,
+        "file_bytes": 1915305312,
+        "head_dim": 128,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 1207959552,
+          "4096": 301989888
+        },
+        "n_active_params": 3075098624,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 36,
+        "n_params": 3075098624,
+        "quant": "Q4_K_M",
+        "vocab_size": 128256
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 1915305312
+    },
+    "SmolLM3-Q8_0.gguf": {
+      "actual_sha256": "8aa8cc74656137174a1988d993b00828e65a86fd68773412b632a75aa1373248",
+      "elapsed_seconds": 7.44,
+      "expected_sha256": "8aa8cc74656137174a1988d993b00828e65a86fd68773412b632a75aa1373248",
+      "header_ok": true,
+      "metadata": {
+        "arch": "smollm3",
+        "d_model": 2048,
+        "file_bytes": 3275574624,
+        "head_dim": 128,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 1207959552,
+          "4096": 301989888
+        },
+        "n_active_params": 3075098624,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 4,
+        "n_layers": 36,
+        "n_params": 3075098624,
+        "quant": "Q8_0",
+        "vocab_size": 128256
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 3275574624
+    },
+    "gemma-4-12b-it-qat-q4_0.gguf": {
+      "actual_sha256": "93567e57a8fe10b23569b9d9ec38cd005deedf71e29477c421a4b83f418a538b",
+      "elapsed_seconds": 16.333,
+      "expected_sha256": "93567e57a8fe10b23569b9d9ec38cd005deedf71e29477c421a4b83f418a538b",
+      "header_ok": true,
+      "metadata": {
+        "arch": "gemma4",
+        "d_model": 3840,
+        "file_bytes": 6975879296,
+        "head_dim": 512,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 939524096,
+          "4096": 738197504
+        },
+        "n_active_params": 11907350576,
+        "n_expert": 0,
+        "n_expert_used": 0,
+        "n_kv_heads": 8,
+        "n_layers": 48,
+        "n_params": 11907350576,
+        "quant": "Q4_0",
+        "vocab_size": 262144
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 6975879296
+    },
+    "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf": {
+      "actual_sha256": "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f",
+      "elapsed_seconds": 20.38,
+      "expected_sha256": "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f",
+      "header_ok": true,
+      "metadata": {
+        "arch": "gemma4",
+        "d_model": 2816,
+        "file_bytes": 16947541728,
+        "head_dim": 512,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 754974720,
+          "4096": 503316480
+        },
+        "n_active_params": 3822527246,
+        "n_expert": 128,
+        "n_expert_used": 8,
+        "n_kv_heads": 8,
+        "n_layers": 30,
+        "n_params": 25233142046,
+        "quant": "Q4_K_M",
+        "vocab_size": 262144
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 16947541728
+    },
+    "gpt-oss-120b-MXFP4.gguf": {
+      "actual_sha256": "582bd40f6886200101f4c4ed9f25f3fe80cc14c86e9e2b37746cd8904a0c622d",
+      "elapsed_seconds": 32.869,
+      "expected_sha256": "582bd40f6886200101f4c4ed9f25f3fe80cc14c86e9e2b37746cd8904a0c622d",
+      "header_ok": true,
+      "metadata": {
+        "arch": "gpt-oss",
+        "d_model": 2880,
+        "file_bytes": 63387346208,
+        "head_dim": 64,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 1207959552,
+          "4096": 301989888
+        },
+        "n_active_params": 5711982912,
+        "n_expert": 128,
+        "n_expert_used": 4,
+        "n_kv_heads": 8,
+        "n_layers": 36,
+        "n_params": 116829156672,
+        "quant": "MXFP4",
+        "vocab_size": 201088
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 63387346208
+    },
+    "gpt-oss-20b-MXFP4.gguf": {
+      "actual_sha256": "27cd6c432c7672cb812a92f611cf3ba7bbc35928262bb1e1253ff4ee6ae35901",
+      "elapsed_seconds": 14.445,
+      "expected_sha256": "27cd6c432c7672cb812a92f611cf3ba7bbc35928262bb1e1253ff4ee6ae35901",
+      "header_ok": true,
+      "metadata": {
+        "arch": "gpt-oss",
+        "d_model": 2880,
+        "file_bytes": 12109566624,
+        "head_dim": 64,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 805306368,
+          "4096": 201326592
+        },
+        "n_active_params": 4187440704,
+        "n_expert": 32,
+        "n_expert_used": 4,
+        "n_kv_heads": 8,
+        "n_layers": 24,
+        "n_params": 20914757184,
+        "quant": "MXFP4",
+        "vocab_size": 201088
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 12109566624
+    },
+    "inclusionAI_Ling-mini-2.0-Q4_K_M.gguf": {
+      "actual_sha256": "c61858e114c12ac14c0ca47e5bc399892946f77d8eb1d96b8c4e164c61adbfd0",
+      "elapsed_seconds": 8.756,
+      "expected_sha256": "c61858e114c12ac14c0ca47e5bc399892946f77d8eb1d96b8c4e164c61adbfd0",
+      "header_ok": true,
+      "metadata": {
+        "arch": "bailingmoe2",
+        "d_model": 2048,
+        "file_bytes": 9941894336,
+        "head_dim": 128,
+        "kv_bytes_by_depth": {
+          "0": 0,
+          "16384": 671088640,
+          "4096": 167772160
+        },
+        "n_active_params": 1432973056,
+        "n_expert": 256,
+        "n_expert_used": 8,
+        "n_kv_heads": 4,
+        "n_layers": 20,
+        "n_params": 16255643392,
+        "quant": "Q4_K_M",
+        "vocab_size": 157184
+      },
+      "metadata_mismatches": {},
+      "metadata_ok": true,
+      "sha256_ok": true,
+      "size_bytes": 9941894336
+    }
+  },
+  "generated_at": "2026-09-06T03:32:34.218496Z",
+  "host": "mac-studio-m4-max",
+  "manifest": "results/model_manifest.json",
+  "manifest_sha256": "2a672d622a30fd2107a01735744de9ba24e97025c3b9b973b5df442b2b662ec6",
+  "model_sources": "results/model_sources_mac-studio-m4-max.json",
+  "models_dir": "/Users/lun/Projects/O1A/gguf-perf/models",
+  "schema_version": 1,
+  "status": "pass",
+  "verified_bytes": 336367242336,
+  "verified_count": 23
+}

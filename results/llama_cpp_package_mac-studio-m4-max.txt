@@ -1,0 +1,12 @@
+installation_method: official ggml-org/llama.cpp GitHub release archive
+tag: b10794
+source_commit: f9f09f02cc44d87d842dbd2d578857d92d4bb63b
+asset: llama-b10794-bin-macos-arm64.tar.gz
+asset_size_bytes: 11108935
+asset_sha256: 093a76388e748f16e769b982910269b57341d59a172d49c3692b117728ca8a8d
+asset_url: https://github.com/ggml-org/llama.cpp/releases/download/b10794/llama-b10794-bin-macos-arm64.tar.gz
+attestation: https://github.com/ggml-org/llama.cpp/attestations/45153754
+runner: /Users/lun/.local/share/gguf-perf/llama-b10794/llama-bench
+runner_sha256: 796a774c7e8c51834b3eec53c59152a08de4ebaa1cc6d31b8d07010ed5a74ed3
+backend: Metal (embedded library)
+

@@ -484,6 +484,12 @@ def write_json(path: Path, obj) -> None:
 
 def git_commit() -> str:
     """Record provenance so every result row can be traced to the exact code."""
+    # On a fresh macOS host, /usr/bin/git is a launcher that can open the Xcode
+    # Command Line Tools installer.  A source archive has no commit to resolve,
+    # so avoid invoking Git at all.  ``exists()`` intentionally accepts either
+    # a normal .git directory or the .git pointer file used by worktrees.
+    if not (ROOT / ".git").exists():
+        return "nogit"
     try:
         return subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],

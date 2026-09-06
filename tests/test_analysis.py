@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from llmperf import analyze as analyze_module
 from llmperf.analyze import (add_features, apply_eta, error_table,
                              error_table_by_host, evaluate_prefill, fit_eta,
                              prefill_error_table_by_host, load_calibration,
@@ -71,9 +72,10 @@ class PrimaryCohortTests(unittest.TestCase):
     def test_repository_primary_rows_are_all_quality_protocol_complete(self) -> None:
         rows = load_measurements(RESULTS_DIR)
         self.assertTrue(rows["quality_protocol"].all())
-        # Keep the frozen manuscript cohort invariant while allowing additional
-        # hosts to be collected in the same results directory.
+        # Keep the frozen three-host manuscript cohort invariant.
         self.assertEqual(len(rows[rows["host"] == "lun-mac"]), 132)
+        self.assertEqual(
+            len(rows[rows["host"] == "mac-studio-m4-max"]), 138)
         self.assertEqual(len(rows[rows["host"] == "rtx5080"]), 84)
 
     def test_partial_offload_rows_are_not_primary(self) -> None:
@@ -93,6 +95,9 @@ class PrimaryCohortTests(unittest.TestCase):
             "stddev_ts": 0.1, "file_bytes": 10, "n_params": 10,
             "n_active_params": 10, "n_layers": 1, "n_kv_heads": 1,
             "head_dim": 1, "n_expert": 0, "error": "",
+            "repetitions": 5, "settle_s": 45, "flash_attn": 1,
+            "type_k": "f16", "type_v": "f16", "n_batch": 2048,
+            "n_ubatch": 512,
         }
         legacy = {
             **base, "timestamp": "2026-01-01T00:00:00Z", "avg_ts": 10.0,
@@ -124,6 +129,50 @@ class PrimaryCohortTests(unittest.TestCase):
         })
         got = select_primary_measurements(rows)
         self.assertEqual(got["model_file"].tolist(), ["gated.gguf"])
+
+
+class HostTransferTests(unittest.TestCase):
+    def test_unseen_quant_uses_trained_host_median(self) -> None:
+        eta = pd.Series(
+            [0.25, 0.75],
+            index=pd.MultiIndex.from_tuples(
+                [("host-a", "Q4"), ("host-a", "Q6")],
+                names=["host", "quant"],
+            ),
+        )
+        target = pd.DataFrame({
+            "host": ["host-a"], "quant": ["Q8"],
+            "bw": [100.0], "bytes_active": [10.0],
+        })
+
+        prediction = apply_eta(target, eta, "bytes_active")
+
+        self.assertAlmostEqual(float(prediction[0]), 5.0)
+
+    def test_b2_transfer_weights_source_hosts_equally(self) -> None:
+        # source-a contributes three rows while source-b contributes one.  A
+        # row-pooled median would therefore transfer eta=1; fitting each source
+        # independently and then taking their median transfers eta=2.
+        rows = pd.DataFrame([
+            {"host": "source-a", "quant": "Q4", "split": "train",
+             "avg_ts": 1.0, "bytes_active": 1.0, "bw": 1.0},
+            {"host": "source-a", "quant": "Q4", "split": "train",
+             "avg_ts": 1.0, "bytes_active": 1.0, "bw": 1.0},
+            {"host": "source-a", "quant": "Q4", "split": "train",
+             "avg_ts": 1.0, "bytes_active": 1.0, "bw": 1.0},
+            {"host": "source-b", "quant": "Q4", "split": "train",
+             "avg_ts": 3.0, "bytes_active": 1.0, "bw": 1.0},
+            {"host": "target", "quant": "Q4", "split": "test",
+             "avg_ts": 2.0, "bytes_active": 1.0, "bw": 1.0},
+        ])
+
+        transfer = leave_one_machine_out_b2(rows).set_index("held_out_host")
+        target = transfer.loc["target"]
+
+        self.assertEqual(target["source_hosts"], '["source-a","source-b"]')
+        self.assertEqual(int(target["n_source_hosts"]), 2)
+        self.assertEqual(int(target["n_train"]), 4)
+        self.assertAlmostEqual(float(target["MAPE_%"]), 0.0)
 
 
 class MetadataSnapshotTests(unittest.TestCase):
@@ -188,6 +237,49 @@ class MetadataSnapshotTests(unittest.TestCase):
                 got = refresh_metadata(
                     rows, Path(tmp), frozen, prefer_live=False)
         self.assertEqual(got.iloc[0]["arch"], "frozen")
+
+    def test_analysis_cli_requests_snapshot_only_metadata(self) -> None:
+        class StopAfterFeatureSelection(Exception):
+            pass
+
+        rows = pd.DataFrame({"host": ["host-a"]})
+        calibration = {"host-a": {"host": "host-a"}}
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(analyze_module, "load_measurements",
+                             return_value=rows), \
+                patch.object(analyze_module, "load_calibration",
+                             return_value=calibration), \
+                patch.object(analyze_module, "load_splits", return_value={}), \
+                patch.object(analyze_module, "load_model_metadata",
+                             return_value={}), \
+                patch.object(analyze_module, "add_features",
+                             side_effect=StopAfterFeatureSelection) as add:
+            root = Path(tmp)
+            with self.assertRaises(StopAfterFeatureSelection):
+                analyze_module.main([
+                    "--results", str(root),
+                    "--models-dir", str(root / "models"),
+                    "--figures", str(root / "figures"),
+                ])
+
+        self.assertFalse(add.call_args.kwargs["prefer_live"])
+
+    def test_refinement_snapshot_only_shapes_ignore_installed_gguf(self) -> None:
+        snapshot = {
+            "model.gguf": {
+                "vocab_size": 123, "d_model": 456,
+                "embd_bytes": 789, "tied_embeddings": False,
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "model.gguf").touch()
+            with patch("llmperf.refine.read_gguf_meta",
+                       side_effect=AssertionError("live read attempted")):
+                got = model_shapes(
+                    ["model.gguf"], Path(tmp), snapshot, prefer_live=False)
+
+        self.assertEqual(int(got.iloc[0]["vocab_size"]), 123)
+        self.assertEqual(int(got.iloc[0]["d_model"]), 456)
 
     def test_snapshot_for_different_file_size_fails(self) -> None:
         fields = {
@@ -263,16 +355,61 @@ class MetadataSnapshotTests(unittest.TestCase):
         self.assertAlmostEqual(got["test"], 19.3, places=1)
 
         transfer = leave_one_machine_out_b2(all_dec).set_index("held_out_host")
-        self.assertAlmostEqual(float(transfer.loc["lun-mac", "MAPE_%"]),
-                               20.82, places=2)
-        self.assertAlmostEqual(float(transfer.loc["rtx5080", "MAPE_%"]),
-                               21.69, places=2)
         transfer_test = leave_one_machine_out_b2(
             all_dec, target_split="test").set_index("held_out_host")
-        self.assertAlmostEqual(
-            float(transfer_test.loc["lun-mac", "MAPE_%"]), 13.94, places=2)
-        self.assertAlmostEqual(
-            float(transfer_test.loc["rtx5080", "MAPE_%"]), 36.70, places=2)
+
+        expected_all = {
+            "lun-mac": {
+                "source_hosts": '["mac-studio-m4-max","rtx5080"]',
+                "n_source_hosts": 2, "n_train": 81, "n_held": 57,
+                "MAPE_%": 14.47, "median_APE_%": 8.02,
+                "max_APE_%": 73.61,
+            },
+            "mac-studio-m4-max": {
+                "source_hosts": '["lun-mac","rtx5080"]',
+                "n_source_hosts": 2, "n_train": 81, "n_held": 60,
+                "MAPE_%": 15.42, "median_APE_%": 10.78,
+                "max_APE_%": 84.30,
+            },
+            "rtx5080": {
+                "source_hosts": '["lun-mac","mac-studio-m4-max"]',
+                "n_source_hosts": 2, "n_train": 90, "n_held": 42,
+                "MAPE_%": 20.80, "median_APE_%": 18.18,
+                "max_APE_%": 68.13,
+            },
+        }
+        expected_test = {
+            "lun-mac": {
+                "source_hosts": '["mac-studio-m4-max","rtx5080"]',
+                "n_source_hosts": 2, "n_train": 81, "n_held": 12,
+                "MAPE_%": 11.59, "median_APE_%": 6.00,
+                "max_APE_%": 45.82,
+            },
+            "mac-studio-m4-max": {
+                "source_hosts": '["lun-mac","rtx5080"]',
+                "n_source_hosts": 2, "n_train": 81, "n_held": 15,
+                "MAPE_%": 16.76, "median_APE_%": 14.36,
+                "max_APE_%": 57.74,
+            },
+            "rtx5080": {
+                "source_hosts": '["lun-mac","mac-studio-m4-max"]',
+                "n_source_hosts": 2, "n_train": 90, "n_held": 6,
+                "MAPE_%": 35.97, "median_APE_%": 25.66,
+                "max_APE_%": 68.13,
+            },
+        }
+        for actual, expected in (
+                (transfer, expected_all), (transfer_test, expected_test)):
+            self.assertEqual(set(actual.index), set(expected))
+            for host, values in expected.items():
+                self.assertEqual(
+                    actual.loc[host, "source_hosts"], values["source_hosts"])
+                for column in ("n_source_hosts", "n_train", "n_held"):
+                    self.assertEqual(
+                        int(actual.loc[host, column]), values[column])
+                for column in ("MAPE_%", "median_APE_%", "max_APE_%"):
+                    self.assertAlmostEqual(
+                        float(actual.loc[host, column]), values[column], places=2)
 
     def test_prefill_headline_is_fit_and_scored_at_empty_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -298,7 +435,7 @@ class MetadataSnapshotTests(unittest.TestCase):
         self.assertTrue({"pred_P1", "ape_P1", "pred_P2", "ape_P2"}
                         .issubset(pf.columns))
 
-    def test_host_tables_preserve_the_two_host_headlines(self) -> None:
+    def test_host_tables_preserve_the_three_host_headlines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             missing_models = Path(tmp)
             measurements = load_measurements(RESULTS_DIR)
@@ -319,6 +456,10 @@ class MetadataSnapshotTests(unittest.TestCase):
             float(decode.loc[("lun-mac", "B2", "test"), "MAPE_%"]),
             13.11, places=2)
         self.assertAlmostEqual(
+            float(decode.loc[
+                ("mac-studio-m4-max", "B2", "test"), "MAPE_%"]),
+            14.37, places=2)
+        self.assertAlmostEqual(
             float(decode.loc[("rtx5080", "B2", "test"), "MAPE_%"]),
             36.15, places=2)
 
@@ -329,6 +470,10 @@ class MetadataSnapshotTests(unittest.TestCase):
         self.assertAlmostEqual(
             float(prefill.loc[("lun-mac", key, "test"), "MAPE_%"]),
             18.68, places=2)
+        self.assertAlmostEqual(
+            float(prefill.loc[
+                ("mac-studio-m4-max", key, "test"), "MAPE_%"]),
+            22.23, places=2)
         self.assertAlmostEqual(
             float(prefill.loc[("rtx5080", key, "test"), "MAPE_%"]),
             108.18, places=2)

@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -30,17 +31,611 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RESULTS = ROOT / "results"
 
-HOST_LABELS = {
-    "lun-mac": "MacBook M4 Max",
-    "mac-studio-m4-max": "Mac Studio M4 Max",
-    "rtx5080": "RTX 5080",
+EXPECTED_HOSTS = {
+    "lun-mac": {
+        "label": "MacBook Pro M4 Max",
+        "code": "MB",
+        "colour": "#377eb8",
+        "marker": "o",
+        "linestyle": "-",
+        "hatch": "",
+        "measurements": "measurements_lun-mac.csv",
+        "calibration": "calibration_lun-mac.json",
+        "environment": "env_lun-mac.json",
+        "provenance": {},
+        "require_manifest_coverage": True,
+    },
+    "mac-studio-m4-max": {
+        "label": "Mac Studio M4 Max",
+        "code": "MS",
+        "colour": "#4daf4a",
+        "marker": "^",
+        "linestyle": "-.",
+        "hatch": "xx",
+        "measurements": "measurements_mac-studio-m4-max.csv",
+        "calibration": "calibration_mac-studio-m4-max.json",
+        "environment": "env_mac-studio-m4-max.json",
+        "provenance": {
+            "system profile": "system_profile_mac-studio-m4-max.txt",
+            "operating system": "os_mac-studio-m4-max.txt",
+            "source commit": "source_commit_mac-studio-m4-max.txt",
+            "measurement-source SHA-256": "measurement_source_tree_mac-studio-m4-max.sha256",
+            "llama.cpp package": "llama_cpp_package_mac-studio-m4-max.txt",
+            "llama-bench SHA-256": "llama_bench_mac-studio-m4-max.sha256",
+            "model sources": "model_sources_mac-studio-m4-max.json",
+            "model integrity": "model_integrity_mac-studio-m4-max.json",
+            "Python packages": "python_packages_mac-studio-m4-max.txt",
+            "Tectonic package": "tectonic_package_mac-studio-m4-max.txt",
+            "Tectonic SHA-256": "tectonic_mac-studio-m4-max.sha256",
+        },
+        "require_manifest_coverage": True,
+    },
+    "rtx5080": {
+        "label": "RTX 5080",
+        "code": "RTX",
+        "colour": "#e6550d",
+        "marker": "s",
+        "linestyle": "--",
+        "hatch": "///",
+        "measurements": "measurements_rtx5080.csv",
+        "calibration": "calibration_rtx5080.json",
+        "environment": "env_rtx5080.json",
+        "provenance": {},
+        "require_manifest_coverage": False,
+    },
 }
+
+HOST_LABELS = {
+    host: str(spec["label"]) for host, spec in EXPECTED_HOSTS.items()
+}
+
+DECLARED_DEPTHS = (0, 4096, 16384)
+DECLARED_GRID = frozenset(
+    (phase, depth)
+    for phase in ("decode", "prefill")
+    for depth in DECLARED_DEPTHS
+)
+DECLARED_ENV_PROTOCOL = {
+    "flash_attn": "on (pinned)",
+    "cache_type_k": "f16",
+    "cache_type_v": "f16",
+    "repetitions": 5,
+    "settle_seconds": 45.0,
+    "warmup": "llama-bench default (enabled)",
+}
+DECLARED_NUMERIC_FIELDS = {
+    "n_gpu_layers": 99,
+    "repetitions": 5,
+    "settle_s": 45.0,
+    "max_cv_pct": 3.0,
+    "n_batch": 2048,
+    "n_ubatch": 512,
+}
+DECLARED_TEXT_FIELDS = {
+    "type_k": "f16",
+    "type_v": "f16",
+}
+QUALITY_FIELDS = ("load_before", "load_after", "attempts", "kept_cv_pct")
 
 
 def host_label(value: object) -> str:
     """Human-readable label while preserving unknown host identifiers."""
     value = str(value)
     return HOST_LABELS.get(value, value)
+
+
+def host_code(value: object) -> str:
+    """Compact, unambiguous table code for a known host."""
+    value = str(value)
+    spec = EXPECTED_HOSTS.get(value)
+    return str(spec["code"]) if spec else value
+
+
+def english_join(values: list[str]) -> str:
+    """Join display labels without assuming a fixed host count."""
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return " and ".join(values)
+    return ", ".join(values[:-1]) + ", and " + values[-1]
+
+
+def _numeric_column(frame: pd.DataFrame, name: str) -> pd.Series:
+    if name not in frame.columns:
+        return pd.Series(np.nan, index=frame.index, dtype=float)
+    return pd.to_numeric(frame[name], errors="coerce")
+
+
+def _text_column(frame: pd.DataFrame, name: str) -> pd.Series:
+    if name not in frame.columns:
+        return pd.Series("", index=frame.index, dtype="string")
+    return frame[name].fillna("").astype(str).str.strip()
+
+
+def environment_protocol_errors(environment: dict, host: str) -> list[str]:
+    """Validate the frozen environment declaration for one paper host."""
+    errors: list[str] = []
+    if str(environment.get("host", "")) != host:
+        errors.append(f"environment host is {environment.get('host')!r}")
+    protocol = environment.get("protocol")
+    if not isinstance(protocol, dict):
+        return errors + ["environment protocol is missing or not an object"]
+    if set(protocol) != set(DECLARED_ENV_PROTOCOL):
+        errors.append(
+            "environment protocol fields differ: "
+            f"expected={sorted(DECLARED_ENV_PROTOCOL)}, found={sorted(protocol)}"
+        )
+    for field, expected in DECLARED_ENV_PROTOCOL.items():
+        actual = protocol.get(field)
+        if isinstance(expected, (int, float)):
+            try:
+                matches = float(actual) == float(expected)
+            except (TypeError, ValueError):
+                matches = False
+        else:
+            matches = str(actual) == expected
+        if not matches:
+            errors.append(
+                f"environment protocol {field}={actual!r}, expected {expected!r}"
+            )
+    try:
+        if int(environment.get("threads")) <= 0:
+            errors.append("environment threads must be positive")
+    except (TypeError, ValueError):
+        errors.append("environment threads are missing or malformed")
+    for field in ("platform", "git_commit", "llama_bench_version"):
+        if not str(environment.get(field, "")).strip():
+            errors.append(f"environment {field} is missing")
+    return errors
+
+
+def _row_identity_mask(
+    frame: pd.DataFrame, environment: dict, host: str
+) -> pd.Series:
+    mask = _text_column(frame, "host").eq(host)
+    for column, env_field in (
+        ("platform", "platform"),
+        ("git_commit", "git_commit"),
+        ("llama_bench_version", "llama_bench_version"),
+    ):
+        mask &= _text_column(frame, column).eq(str(environment.get(env_field, "")))
+    try:
+        threads = int(environment["threads"])
+    except (KeyError, TypeError, ValueError):
+        threads = -1
+    mask &= _numeric_column(frame, "n_threads").eq(threads)
+    return mask.fillna(False).astype(bool)
+
+
+def _selected_protocol_mask(
+    frame: pd.DataFrame, environment: dict, host: str
+) -> pd.Series:
+    mask = _row_identity_mask(frame, environment, host)
+    numeric = {
+        field: _numeric_column(frame, field)
+        for field in (*DECLARED_NUMERIC_FIELDS, *QUALITY_FIELDS)
+    }
+    for field, expected in DECLARED_NUMERIC_FIELDS.items():
+        mask &= numeric[field].eq(expected)
+    for field, expected in DECLARED_TEXT_FIELDS.items():
+        mask &= _text_column(frame, field).str.lower().eq(expected)
+    mask &= _text_column(frame, "flash_attn").str.lower().isin(
+        {"1", "1.0", "true", "on", "yes"}
+    )
+    for field in QUALITY_FIELDS:
+        mask &= np.isfinite(numeric[field])
+    mask &= numeric["attempts"].ge(1)
+    mask &= numeric["attempts"].eq(numeric["attempts"].round())
+    mask &= numeric["kept_cv_pct"].ge(0)
+
+    prompt = _numeric_column(frame, "n_prompt")
+    generated = _numeric_column(frame, "n_gen")
+    prefill = prompt.eq(512) & generated.eq(0)
+    decode = prompt.eq(0) & generated.eq(128)
+    mask &= prefill | decode
+    mask &= _numeric_column(frame, "n_depth").isin(DECLARED_DEPTHS)
+
+    def samples_match(value: object) -> bool:
+        try:
+            samples = json.loads(str(value))
+            return (
+                isinstance(samples, list)
+                and len(samples) == DECLARED_NUMERIC_FIELDS["repetitions"]
+                and all(math.isfinite(float(sample)) for sample in samples)
+            )
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return False
+
+    if "samples_ts" not in frame.columns:
+        mask &= False
+    else:
+        mask &= frame["samples_ts"].map(samples_match)
+    return mask.fillna(False).astype(bool)
+
+
+def _explicit_error_mask(
+    frame: pd.DataFrame, environment: dict, host: str
+) -> pd.Series:
+    mask = _row_identity_mask(frame, environment, host)
+    mask &= _text_column(frame, "error").ne("")
+    for field in ("n_gpu_layers", "repetitions", "settle_s", "max_cv_pct"):
+        mask &= _numeric_column(frame, field).eq(DECLARED_NUMERIC_FIELDS[field])
+    mask &= _numeric_column(frame, "n_prompt").eq(512)
+    mask &= _numeric_column(frame, "n_gen").eq(0)
+    mask &= _numeric_column(frame, "n_depth").eq(DECLARED_DEPTHS[0])
+    return mask.fillna(False).astype(bool)
+
+
+def campaign_validation_errors(
+    selected: pd.DataFrame,
+    raw: pd.DataFrame,
+    manifest: dict,
+    environment: dict,
+    host: str,
+    *,
+    require_manifest_coverage: bool,
+) -> list[str]:
+    """Return reasons a host is not a complete, exact paper campaign.
+
+    A required model must contribute the six phase--depth cells selected by the
+    analysis, or one exact-protocol error record and no selected partial grid.
+    RTX deliberately measured a manifest subset, so callers can validate every
+    attempted RTX model without requiring all 23 manifest entries.
+    """
+    errors = environment_protocol_errors(environment, host)
+    if "host" not in selected.columns or "host" not in raw.columns:
+        return errors + ["measurement rows have no host column"]
+
+    raw_hosts = set(_text_column(raw, "host")) - {""}
+    if raw_hosts != {host}:
+        errors.append(
+            f"measurement file records host(s) {sorted(raw_hosts)}, expected {host}"
+        )
+    selected_host = selected[_text_column(selected, "host").eq(host)].copy()
+    raw_host = raw[_text_column(raw, "host").eq(host)].copy()
+    manifest_models = set(map(str, manifest))
+    attempted_models = set(_text_column(raw_host, "model_file")) - {""}
+    selected_models = set(_text_column(selected_host, "model_file")) - {""}
+    unknown = sorted((attempted_models | selected_models) - manifest_models)
+    if unknown:
+        errors.append("models absent from manifest: " + ", ".join(unknown))
+    if not attempted_models:
+        errors.append("no models were attempted")
+
+    protocol_mask = _selected_protocol_mask(selected_host, environment, host)
+    if len(selected_host) and not protocol_mask.all():
+        errors.append(
+            f"{int((~protocol_mask).sum())} selected row(s) violate the declared "
+            "protocol or environment identity"
+        )
+    valid_selected = selected_host[protocol_mask]
+    valid_errors = raw_host[_explicit_error_mask(raw_host, environment, host)]
+    explicit_failures = set(_text_column(valid_errors, "model_file")) - {""}
+
+    required_models = manifest_models if require_manifest_coverage else attempted_models
+    missing_attempts = sorted(required_models - attempted_models)
+    if missing_attempts:
+        errors.append(
+            f"{len(missing_attempts)} manifest model(s) were not attempted: "
+            + ", ".join(missing_attempts)
+        )
+
+    incomplete: list[str] = []
+    for model in sorted(required_models & manifest_models, key=str.casefold):
+        rows = valid_selected[_text_column(valid_selected, "model_file").eq(model)]
+        prompt = _numeric_column(rows, "n_prompt")
+        generated = _numeric_column(rows, "n_gen")
+        phases = np.where(generated.gt(0), "decode", "prefill")
+        cells = set(zip(phases, _numeric_column(rows, "n_depth").astype(int)))
+        if len(rows) == len(DECLARED_GRID) and cells == DECLARED_GRID:
+            continue
+        if not len(rows) and model in explicit_failures:
+            continue
+        missing_cells = sorted(DECLARED_GRID - cells)
+        detail = f"{model} has {len(rows)}/6 selected rows"
+        if missing_cells:
+            detail += f" (missing {missing_cells})"
+        if model in explicit_failures:
+            detail += " plus an error record"
+        incomplete.append(detail)
+    if incomplete:
+        errors.append("incomplete model grids: " + "; ".join(incomplete))
+    return errors
+
+
+def model_source_provenance_errors(
+    document: dict, manifest: dict, manifest_sha256: str
+) -> list[str]:
+    """Validate frozen repository revisions and per-file LFS SHA-256 values."""
+    errors: list[str] = []
+    if document.get("schema_version") != 1:
+        errors.append("model-source schema_version is not 1")
+    if document.get("frozen_manifest_sha256") != manifest_sha256:
+        errors.append("model-source manifest hash does not match model_manifest.json")
+    revisions = document.get("repository_revisions")
+    file_hashes = document.get("file_lfs_sha256")
+    if not isinstance(revisions, dict) or not isinstance(file_hashes, dict):
+        return errors + ["model-source revision/hash mappings are missing"]
+    expected_repositories = {
+        str(entry.get("repo_id", "")) for entry in manifest.values()
+    } - {""}
+    if set(revisions) != expected_repositories:
+        errors.append("model-source repository coverage differs from the manifest")
+    if set(file_hashes) != set(map(str, manifest)):
+        errors.append("model-source file-hash coverage differs from the manifest")
+    if any(not re.fullmatch(r"[0-9a-f]{40}", str(value))
+           for value in revisions.values()):
+        errors.append("model-source repository revision is not a 40-digit SHA-1")
+    if any(not re.fullmatch(r"[0-9a-f]{64}", str(value))
+           for value in file_hashes.values()):
+        errors.append("model-source file identifier is not a 64-digit SHA-256")
+    return errors
+
+
+def model_integrity_provenance_errors(
+    document: dict,
+    manifest: dict,
+    model_sources: dict,
+    manifest_sha256: str,
+    host: str,
+) -> list[str]:
+    """Validate the persisted local-GGUF integrity attestation."""
+    if not isinstance(document, dict):
+        return ["model-integrity report is not a JSON object"]
+
+    errors: list[str] = []
+    if document.get("schema_version") != 1:
+        errors.append("model-integrity schema_version is not 1")
+    if document.get("status") != "pass":
+        errors.append("model-integrity status is not pass")
+    if document.get("host") != host:
+        errors.append(
+            f"model-integrity host is {document.get('host')!r}, expected {host!r}"
+        )
+    if document.get("manifest_sha256") != manifest_sha256:
+        errors.append("model-integrity manifest hash does not match model_manifest.json")
+    if document.get("errors") != []:
+        errors.append("model-integrity errors list is not empty")
+
+    if not isinstance(manifest, dict):
+        return errors + ["model-integrity manifest is not a JSON object"]
+    try:
+        expected_bytes = sum(
+            int(entry["size_bytes"]) for entry in manifest.values()
+        )
+    except (KeyError, TypeError, ValueError):
+        return errors + ["model-integrity manifest has invalid size_bytes entries"]
+    expected_count = len(manifest)
+    for field, expected in (
+        ("expected_count", expected_count),
+        ("verified_count", expected_count),
+        ("expected_bytes", expected_bytes),
+        ("verified_bytes", expected_bytes),
+    ):
+        if document.get(field) != expected:
+            errors.append(
+                f"model-integrity {field} is {document.get(field)!r}, "
+                f"expected {expected}"
+            )
+
+    files = document.get("files")
+    if not isinstance(files, dict):
+        return errors + ["model-integrity files mapping is missing"]
+    expected_files = set(map(str, manifest))
+    actual_files = set(map(str, files))
+    missing = sorted(expected_files - actual_files, key=str.casefold)
+    unexpected = sorted(actual_files - expected_files, key=str.casefold)
+    if missing:
+        errors.append("model-integrity report omits file(s): " + ", ".join(missing))
+    if unexpected:
+        errors.append(
+            "model-integrity report contains unexpected file(s): "
+            + ", ".join(unexpected)
+        )
+
+    source_hashes = (
+        model_sources.get("file_lfs_sha256")
+        if isinstance(model_sources, dict) else None
+    )
+    if not isinstance(source_hashes, dict):
+        return errors + ["model-integrity model-source hash mapping is missing"]
+
+    for name in sorted(expected_files & actual_files, key=str.casefold):
+        item = files[name]
+        if not isinstance(item, dict):
+            errors.append(f"model-integrity entry for {name} is not an object")
+            continue
+        expected_size = manifest[name].get("size_bytes")
+        if item.get("size_bytes") != expected_size:
+            errors.append(
+                f"model-integrity size mismatch for {name}: "
+                f"report={item.get('size_bytes')!r}, manifest={expected_size!r}"
+            )
+        source_hash = source_hashes.get(name)
+        for field in ("expected_sha256", "actual_sha256"):
+            if item.get(field) != source_hash:
+                errors.append(
+                    f"model-integrity {field} mismatch for {name}"
+                )
+        for field in ("sha256_ok", "header_ok", "metadata_ok"):
+            if item.get(field) is not True:
+                errors.append(
+                    f"model-integrity {field} is not true for {name}"
+                )
+        if not isinstance(item.get("metadata"), dict):
+            errors.append(f"model-integrity metadata is missing for {name}")
+        if item.get("metadata_mismatches") != {}:
+            errors.append(
+                f"model-integrity metadata mismatches are not empty for {name}"
+            )
+    return errors
+
+
+def binary_provenance_errors(
+    package_text: str, checksum_text: str, package_key: str, label: str
+) -> list[str]:
+    """Cross-check a recorded binary digest against its package metadata."""
+    package_values = {}
+    for line in package_text.splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            package_values[key.strip()] = value.strip()
+    checksum = checksum_text.strip().split(maxsplit=1)[0] if checksum_text.strip() else ""
+    declared = package_values.get(package_key, "")
+    errors: list[str] = []
+    if not re.fullmatch(r"[0-9a-f]{64}", checksum):
+        errors.append(f"{label} checksum file does not begin with a SHA-256")
+    if not re.fullmatch(r"[0-9a-f]{64}", declared):
+        errors.append(f"{label} package metadata lacks {package_key}")
+    elif checksum and declared != checksum:
+        errors.append(f"{label} package/checksum digests disagree")
+    return errors
+
+
+def measurement_source_provenance_errors(
+    checksum_text: str, root: Path = ROOT
+) -> list[str]:
+    """Validate the exact source inventory used by the measurement pipeline.
+
+    The inventory is deliberately repository-relative and limited to direct
+    ``llmperf/*.py`` modules plus ``requirements.txt``. Computing the expected
+    set from the current tree makes a newly added measurement module mandatory;
+    rejecting extra entries keeps the checksum file from including itself or
+    unrelated paper sources.
+    """
+    errors: list[str] = []
+    root = root.resolve()
+    source_dir = root / "llmperf"
+    expected = {"requirements.txt"}
+    if source_dir.is_dir():
+        try:
+            source_dir.resolve().relative_to(root)
+        except (OSError, RuntimeError, ValueError):
+            errors.append(
+                "measurement source directory resolves outside the repository"
+            )
+        else:
+            expected.update(
+                path.relative_to(root).as_posix()
+                for path in source_dir.glob("*.py")
+            )
+    else:
+        errors.append("measurement source directory is missing: llmperf")
+
+    listed: dict[str, str] = {}
+    resolved_paths: dict[str, Path] = {}
+    lines = checksum_text.splitlines()
+    if not lines:
+        errors.append("measurement-source checksum inventory is empty")
+
+    for line_number, line in enumerate(lines, 1):
+        match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
+        if not match:
+            errors.append(
+                f"measurement-source checksum line {line_number} is malformed"
+            )
+            continue
+        declared, relative_name = match.groups()
+        # Require a canonical POSIX repository-relative spelling. This rejects
+        # traversal, absolute paths, duplicate separators, and Windows paths on
+        # every platform before resolving or opening anything.
+        parts = relative_name.split("/")
+        if (
+            relative_name != relative_name.strip()
+            or relative_name.startswith("/")
+            or "\\" in relative_name
+            or re.match(r"^[A-Za-z]:", relative_name)
+            or any(ord(character) < 32 or ord(character) == 127
+                   for character in relative_name)
+            or any(part in {"", ".", ".."} for part in parts)
+        ):
+            errors.append(
+                f"measurement-source checksum path is unsafe: {relative_name!r}"
+            )
+            continue
+        candidate = root.joinpath(*parts)
+        try:
+            resolved = candidate.resolve()
+            resolved.relative_to(root)
+        except (OSError, RuntimeError, ValueError):
+            errors.append(
+                "measurement-source checksum path resolves outside the repository: "
+                f"{relative_name!r}"
+            )
+            continue
+        if relative_name == (
+            "results/measurement_source_tree_mac-studio-m4-max.sha256"
+        ):
+            errors.append(
+                "measurement-source inventory must not checksum itself: "
+                + relative_name
+            )
+            continue
+        if relative_name in listed:
+            errors.append(
+                f"duplicate measurement-source checksum entry: {relative_name}"
+            )
+            continue
+        listed[relative_name] = declared
+        resolved_paths[relative_name] = resolved
+
+    missing_entries = sorted(expected - set(listed), key=str.casefold)
+    unexpected_entries = sorted(set(listed) - expected, key=str.casefold)
+    if missing_entries:
+        errors.append(
+            "measurement-source inventory omits required file(s): "
+            + ", ".join(missing_entries)
+        )
+    if unexpected_entries:
+        errors.append(
+            "measurement-source inventory contains unexpected file(s): "
+            + ", ".join(unexpected_entries)
+        )
+
+    # Never open an unexpected path supplied by the inventory. Resolve and hash
+    # only members of the exact expected set after coverage has been checked.
+    for relative_name in sorted(expected & set(listed), key=str.casefold):
+        resolved = resolved_paths[relative_name]
+        try:
+            is_file = resolved.is_file()
+        except OSError:
+            is_file = False
+        if not is_file:
+            errors.append(
+                f"listed measurement source is missing: {relative_name}"
+            )
+            continue
+        digest = hashlib.sha256()
+        try:
+            with resolved.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        except OSError as exc:
+            errors.append(
+                f"listed measurement source cannot be read: {relative_name}: {exc}"
+            )
+            continue
+        actual = digest.hexdigest()
+        declared = listed[relative_name]
+        if actual != declared:
+            errors.append(
+                f"measurement-source checksum mismatch for {relative_name}: "
+                f"declared={declared}, actual={actual}"
+            )
+    for relative_name in sorted(expected, key=str.casefold):
+        try:
+            required = (root / relative_name).resolve()
+            required.relative_to(root)
+            is_file = required.is_file()
+        except (OSError, RuntimeError, ValueError):
+            is_file = False
+        if not is_file:
+            errors.append(
+                f"required measurement source is missing: {relative_name}"
+            )
+    return errors
 
 
 def tex(value: object) -> str:
@@ -109,7 +704,8 @@ def sha256(path: Path) -> str:
 def git_head() -> str:
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+            stderr=subprocess.DEVNULL,
         ).strip()
     except Exception:
         return "unavailable"
@@ -229,8 +825,18 @@ def make_summary_figure(dec: pd.DataFrame, prefill: pd.DataFrame) -> None:
         if q in set(ladder["quant"])
     ]
     xpos = {q: i for i, q in enumerate(quants)}
-    colours = {"lun-mac": "#377eb8", "rtx5080": "#e6550d"}
-    markers = {"lun-mac": "o", "rtx5080": "s"}
+    colours = {
+        host: str(spec["colour"]) for host, spec in EXPECTED_HOSTS.items()
+    }
+    markers = {
+        host: str(spec["marker"]) for host, spec in EXPECTED_HOSTS.items()
+    }
+    linestyles = {
+        host: str(spec["linestyle"]) for host, spec in EXPECTED_HOSTS.items()
+    }
+    hatches = {
+        host: str(spec["hatch"]) for host, spec in EXPECTED_HOSTS.items()
+    }
     for host, group in ladder.groupby("host", sort=True):
         group = group.sort_values("order")
         x = group["quant"].map(xpos).to_numpy(float)
@@ -239,6 +845,7 @@ def make_summary_figure(dec: pd.DataFrame, prefill: pd.DataFrame) -> None:
             group["effective_gb_s"],
             color=colours.get(host, "#555555"),
             marker=markers.get(host, "D"),
+            linestyle=linestyles.get(host, ":"),
             lw=1.3,
             ms=4.5,
             label=host_label(host),
@@ -264,11 +871,11 @@ def make_summary_figure(dec: pd.DataFrame, prefill: pd.DataFrame) -> None:
             color=colours.get(host, "#555555"),
             edgecolor="#222222",
             linewidth=0.6,
-            hatch="" if host == "lun-mac" else "///",
+            hatch=hatches.get(host, ".."),
             label=host_label(host),
         )
-        # Put values inside the bars so the tallest depth-zero RTX label does
-        # not collide with the legend in the compact two-panel rendering.
+        # Put values inside the bars so a tall label does not collide with the
+        # legend in the compact two-panel rendering.
         axes[1].bar_label(
             bars, fmt="%.1f", padding=-12, fontsize=8, color="white"
         )
@@ -283,19 +890,20 @@ def make_summary_figure(dec: pd.DataFrame, prefill: pd.DataFrame) -> None:
 
 
 def main() -> None:
-    paths = {
-        "measurements (lun-mac)": RESULTS / "measurements_lun-mac.csv",
-        "measurements (rtx5080)": RESULTS / "measurements_rtx5080.csv",
+    paths: dict[str, Path] = {}
+    for host, spec in EXPECTED_HOSTS.items():
+        paths[f"measurements ({host})"] = RESULTS / str(spec["measurements"])
+        paths[f"calibration ({host})"] = RESULTS / str(spec["calibration"])
+        paths[f"environment ({host})"] = RESULTS / str(spec["environment"])
+        for role, filename in dict(spec["provenance"]).items():
+            paths[f"{role} ({host})"] = RESULTS / str(filename)
+    paths.update({
         "decode predictions": RESULTS / "predictions.csv",
         "prefill predictions": RESULTS / "predictions_prefill.csv",
         "decode aggregate error table": RESULTS / "error_table.csv",
         "decode error table by host": RESULTS / "error_table_by_host.csv",
         "prefill aggregate error table": RESULTS / "error_table_prefill.csv",
         "prefill error table by host": RESULTS / "error_table_prefill_by_host.csv",
-        "calibration (lun-mac)": RESULTS / "calibration_lun-mac.json",
-        "calibration (rtx5080)": RESULTS / "calibration_rtx5080.json",
-        "environment (lun-mac)": RESULTS / "env_lun-mac.json",
-        "environment (rtx5080)": RESULTS / "env_rtx5080.json",
         "manifest": RESULTS / "model_manifest.json",
         "metadata": RESULTS / "model_metadata.json",
         "repeatability (lun-mac)": RESULTS / "repeatability_lun-mac.csv",
@@ -305,40 +913,91 @@ def main() -> None:
         "analysis implementation": ROOT / "llmperf" / "analyze.py",
         "refinement implementation": ROOT / "llmperf" / "refine.py",
         "metadata implementation": ROOT / "llmperf" / "common.py",
+        "publication-figure wrapper": HERE / "generate_main_figures.py",
         "appendix generator": HERE / "generate_supplement.py",
-    }
+    })
     missing = [str(p) for p in paths.values() if not p.is_file()]
     if missing:
         raise SystemExit("missing required input(s): " + ", ".join(missing))
+    empty = [str(path) for path in paths.values() if path.stat().st_size == 0]
+    if empty:
+        raise SystemExit("empty required input(s): " + ", ".join(empty))
 
     dec = pd.read_csv(paths["decode predictions"])
     pf = pd.read_csv(paths["prefill predictions"])
     err = pd.read_csv(paths["decode error table by host"])
     pf_err = pd.read_csv(paths["prefill error table by host"])
     measurements_by_host = {
-        "lun-mac": pd.read_csv(paths["measurements (lun-mac)"]),
-        "rtx5080": pd.read_csv(paths["measurements (rtx5080)"]),
+        host: pd.read_csv(paths[f"measurements ({host})"])
+        for host in EXPECTED_HOSTS
     }
     repeat = pd.read_csv(paths["repeatability (lun-mac)"])
     calibrations = {
-        "lun-mac": json.loads(
-            paths["calibration (lun-mac)"].read_text(encoding="utf-8")
-        ),
-        "rtx5080": json.loads(
-            paths["calibration (rtx5080)"].read_text(encoding="utf-8")
-        ),
+        host: json.loads(
+            paths[f"calibration ({host})"].read_text(encoding="utf-8")
+        )
+        for host in EXPECTED_HOSTS
     }
     environments = {
-        "lun-mac": json.loads(
-            paths["environment (lun-mac)"].read_text(encoding="utf-8")
-        ),
-        "rtx5080": json.loads(
-            paths["environment (rtx5080)"].read_text(encoding="utf-8")
-        ),
+        host: json.loads(
+            paths[f"environment ({host})"].read_text(encoding="utf-8")
+        )
+        for host in EXPECTED_HOSTS
     }
     manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
     metadata_doc = json.loads(paths["metadata"].read_text(encoding="utf-8"))
     metadata = metadata_doc["models"]
+
+    studio = "mac-studio-m4-max"
+    if studio in EXPECTED_HOSTS:
+        source_document = json.loads(
+            paths[f"model sources ({studio})"].read_text(encoding="utf-8")
+        )
+        integrity_document = json.loads(
+            paths[f"model integrity ({studio})"].read_text(encoding="utf-8")
+        )
+        manifest_digest = sha256(paths["manifest"])
+        provenance_errors = model_source_provenance_errors(
+            source_document, manifest, manifest_digest
+        )
+        provenance_errors.extend(
+            model_integrity_provenance_errors(
+                integrity_document,
+                manifest,
+                source_document,
+                manifest_digest,
+                studio,
+            )
+        )
+        provenance_errors.extend(
+            measurement_source_provenance_errors(
+                paths[f"measurement-source SHA-256 ({studio})"].read_text(
+                    encoding="utf-8"
+                ),
+                ROOT,
+            )
+        )
+        provenance_errors.extend(
+            binary_provenance_errors(
+                paths[f"llama.cpp package ({studio})"].read_text(encoding="utf-8"),
+                paths[f"llama-bench SHA-256 ({studio})"].read_text(encoding="utf-8"),
+                "runner_sha256",
+                "llama-bench",
+            )
+        )
+        provenance_errors.extend(
+            binary_provenance_errors(
+                paths[f"Tectonic package ({studio})"].read_text(encoding="utf-8"),
+                paths[f"Tectonic SHA-256 ({studio})"].read_text(encoding="utf-8"),
+                "binary_sha256",
+                "Tectonic",
+            )
+        )
+        if provenance_errors:
+            raise SystemExit(
+                "Mac Studio provenance validation failed: "
+                + "; ".join(provenance_errors)
+            )
 
     dec = dec.copy()
     pf = pf.copy()
@@ -348,11 +1007,45 @@ def main() -> None:
         frame["stddev_ts"] = pd.to_numeric(frame["stddev_ts"], errors="coerce")
         frame["row_cv_pct"] = frame["stddev_ts"] / frame["avg_ts"] * 100.0
 
-    hosts = sorted(dec["host"].unique())
-    if set(hosts) != set(pf["host"].unique()):
+    expected_hosts = set(EXPECTED_HOSTS)
+    decode_hosts = set(dec["host"].astype(str).unique())
+    prefill_hosts = set(pf["host"].astype(str).unique())
+    if decode_hosts != prefill_hosts:
         raise SystemExit("decode and prefill exports describe different hosts")
-    if set(hosts) != set(calibrations) or set(hosts) != set(environments):
+    if decode_hosts != expected_hosts:
+        raise SystemExit(
+            "prediction exports do not contain the expected hosts: "
+            f"expected={sorted(expected_hosts)}, found={sorted(decode_hosts)}"
+        )
+    if (set(measurements_by_host) != expected_hosts
+            or set(calibrations) != expected_hosts
+            or set(environments) != expected_hosts):
         raise SystemExit("measurement, calibration, and environment hosts disagree")
+    hosts = list(EXPECTED_HOSTS)
+    for host in hosts:
+        raw_hosts = set(
+            measurements_by_host[host]["host"].dropna().astype(str).unique()
+        )
+        if raw_hosts != {host}:
+            raise SystemExit(
+                f"measurement file for {host} records host(s) {sorted(raw_hosts)}"
+            )
+        for kind, document in (
+            ("calibration", calibrations[host]),
+            ("environment", environments[host]),
+        ):
+            if str(document.get("host", "")) != host:
+                raise SystemExit(
+                    f"{kind} file for {host} records host "
+                    f"{document.get('host')!r}"
+                )
+        for field in ("platform", "git_commit", "cpu"):
+            if calibrations[host].get(field) != environments[host].get(field):
+                raise SystemExit(
+                    f"calibration/environment {field} mismatch for {host}: "
+                    f"{calibrations[host].get(field)!r} vs "
+                    f"{environments[host].get(field)!r}"
+                )
 
     key_columns = ["host", "model_file", "n_depth"]
     if dec.duplicated(key_columns).any() or pf.duplicated(key_columns).any():
@@ -555,9 +1248,7 @@ def main() -> None:
     )
 
     # Account for the complete final protocol cohort, including the reference
-    # probes intentionally omitted from fitting and scoring.  The scored CSVs
-    # contain 198 rows; the paper's 216-row acquisition count also includes
-    # these 18 selected probe observations.
+    # probes intentionally omitted from fitting and scoring.
     selected = select_primary_measurements(load_measurements(RESULTS))
     selected["phase"] = np.where(selected["n_gen"] > 0, "decode", "prefill")
     selected["row_cv_pct"] = (
@@ -580,32 +1271,70 @@ def main() -> None:
             f"selected={len(selected)}, scored={len(dec) + len(pf)}, "
             f"probes={len(probe_observations)}"
         )
+    campaign_errors: list[str] = []
+    for host in hosts:
+        host_errors = campaign_validation_errors(
+            selected,
+            measurements_by_host[host],
+            manifest,
+            environments[host],
+            host,
+            require_manifest_coverage=bool(
+                EXPECTED_HOSTS[host]["require_manifest_coverage"]
+            ),
+        )
+        campaign_errors.extend(f"{host}: {error}" for error in host_errors)
+    if campaign_errors:
+        raise SystemExit(
+            "campaign completeness/protocol validation failed: "
+            + " | ".join(campaign_errors)
+        )
 
-    # Conservative sensitivity for the historical Mac probe exclusion.  The
-    # final exports use device-copy bandwidth, so these Q8 rows no longer set
-    # the B0 ceiling; keeping the pre-specified exclusion avoids changing the
-    # cohort after seeing results.  Quantify what inclusion would have done.
+    # Conservative sensitivity for every host with an LLM-reference probe
+    # exclusion. The final exports use device-copy bandwidth, so these rows do
+    # not set B0; quantify the effect of adding them back and refitting B2.
     selected_featured = add_features(
         selected.copy(), calibrations, split_map, metadata, ROOT / "models",
         prefer_live=False,
     )
-    mac_probe_augmented = selected_featured[
-        (selected_featured["host"] == "lun-mac")
-        & (selected_featured["phase"] == "decode")
-        & selected_featured["bw"].notna()
-    ].copy()
-    mac_probe_prediction = apply_eta(
-        mac_probe_augmented,
-        fit_eta(mac_probe_augmented[mac_probe_augmented["split"] == "train"],
-                "bytes_active"),
-        "bytes_active",
-    )
-    mac_probe_augmented["ape_probe_inclusion"] = ape(
-        mac_probe_prediction, mac_probe_augmented["avg_ts"].to_numpy(float)
-    )
-    mac_probe_train = mac_probe_augmented[mac_probe_augmented["split"] == "train"]
-    mac_probe_test = mac_probe_augmented[mac_probe_augmented["split"] == "test"]
-    mac_original_train = mac_probe_train[~mac_probe_train["is_calibration_probe"]]
+    probe_sensitivity_rows: list[list[str]] = []
+    for host in hosts:
+        augmented = selected_featured[
+            (selected_featured["host"] == host)
+            & (selected_featured["phase"] == "decode")
+            & selected_featured["bw"].notna()
+        ].copy()
+        probe_mask = augmented["is_calibration_probe"].map(bool_value)
+        if augmented.empty or not probe_mask.any():
+            continue
+        augmented_train = augmented[augmented["split"] == "train"]
+        if augmented_train.empty:
+            raise SystemExit(f"no training rows for probe sensitivity on {host}")
+        augmented_prediction = apply_eta(
+            augmented,
+            fit_eta(augmented_train, "bytes_active"),
+            "bytes_active",
+        )
+        augmented["ape_probe_inclusion"] = ape(
+            augmented_prediction, augmented["avg_ts"].to_numpy(float)
+        )
+        augmented_train = augmented[augmented["split"] == "train"]
+        augmented_test = augmented[augmented["split"] == "test"]
+        original_train = augmented_train[
+            ~augmented_train["is_calibration_probe"].map(bool_value)
+        ]
+        probe_sensitivity_rows.append(
+            [
+                tex(host_label(host)),
+                str(int(augmented.loc[probe_mask, "model_file"].nunique())),
+                str(len(augmented_train)),
+                ffmt(augmented_train["ape_probe_inclusion"].mean()),
+                str(len(original_train)),
+                ffmt(original_train["ape_probe_inclusion"].mean()),
+                str(len(augmented_test)),
+                ffmt(augmented_test["ape_probe_inclusion"].mean()),
+            ]
+        )
 
     cohort_flow_rows: list[list[str]] = []
     for host in hosts:
@@ -740,6 +1469,11 @@ def main() -> None:
     )
     n_test_configurations = n_configurations - n_train_configurations
     noisiest_prefill = pf.loc[pf.row_cv_pct.idxmax()]
+    host_names = [host_label(host) for host in hosts]
+    target_fitted_summary = "; ".join(
+        f"{target_fitted_all[host]:.2f}\\% on {host_label(host)}"
+        for host in hosts
+    )
 
     lines: list[str] = [
         "% Generated by generate_supplement.py; do not hand-edit.",
@@ -756,11 +1490,12 @@ def main() -> None:
         r"\begin{center}",
         r"{\Large\bfseries Companion Results Appendix: GGUF Throughput Prediction\par}",
         r"\vspace{4pt}",
-        r"{\normalsize Protocol-complete two-host evidence for the ICASSP manuscript\par}",
+        rf"{{\normalsize Protocol-complete {len(hosts)}-host evidence for the ICASSP manuscript\par}}",
         r"\end{center}",
         r"\textbf{Status.} This is a locally generated companion appendix. It does not claim publication, archival acceptance, or independent replication.",
         r"\section{Scope and cohort}",
-        f"The source manifest contains {len(manifest)} GGUF files. Across two hosts, "
+        f"The source manifest contains {len(manifest)} GGUF files. Across "
+        f"{len(hosts)} hosts ({english_join(host_names)}), "
         f"the scored data contain {len(scored)} unique files and {n_configurations} "
         f"host--file configurations ({n_train_configurations} training and "
         f"{n_test_configurations} held out). Each configuration has one decode and "
@@ -770,7 +1505,7 @@ def main() -> None:
         f"total: {len(dec) + len(pf)} scored rows "
         f"and {len(probe_observations)} reference-probe rows excluded from prediction "
         "fits and scores. Probe exclusion is host-specific, so a file used as a probe "
-        "on one host can be scored on the other.",
+        "on one host can be scored on another.",
         "All exported rows carry the declared protocol fields. The retry decision, however, "
         r"uses the worst within-run \emph{decode} CV in an invocation. Prefill rows inherit "
         "that invocation's protocol metadata but are not gated on their own CV. This "
@@ -834,28 +1569,32 @@ def main() -> None:
         landscape=False,
         lead=[
             r"\subsection{Excluded reference-probe observations}",
-            "These rows complete the 216-observation selected cohort and make the "
+            f"These rows complete the {len(selected)}-observation selected cohort and make the "
             "descriptive matched-host and quantization comparisons reproducible. They "
             "are reported only as measurements, never as prediction errors.",
         ],
     )
 
-    lines.extend(
-        [
-            r"\paragraph{Probe-exclusion sensitivity.}",
-            "The three Mac Q8 files defined the historical LLM-reference "
-            "diagnostic. Their exclusion was fixed before the final device-copy "
-            "analysis and is retained to avoid a post-hoc cohort change. If they "
-            "are included and B2 is refit, MAPE is "
-            f"{mac_probe_train.ape_probe_inclusion.mean():.2f}\\% over "
-            f"{len(mac_probe_train)} training rows and "
-            f"{mac_probe_test.ape_probe_inclusion.mean():.2f}\\% over "
-            f"{len(mac_probe_test)} held-out rows; the latter is unchanged because "
-            "all probes are Q8 training files while the test files are Q4. On the "
-            f"original {len(mac_original_train)} non-probe training rows under "
-            f"this refit, MAPE is {mac_original_train.ape_probe_inclusion.mean():.2f}\\%.",
-        ]
-    )
+    if probe_sensitivity_rows:
+        lines.extend(
+            [
+                r"\paragraph{Probe-exclusion sensitivity.}",
+                "For each host with calibration probes, B2 is refit after adding "
+                "those files back. The original-train column evaluates that refit "
+                "only on non-probe training rows; test rows remain held out.",
+                r"\begin{center}",
+                r"\small",
+                r"\setlength{\tabcolsep}{3.0pt}",
+                r"\begin{tabular}{lrrrrrrr}",
+                r"\toprule",
+                r"Host & Probe cfg. & Aug. train $n$ & Aug. MAPE & Original $n$ & Original MAPE & Test $n$ & Test MAPE\\",
+                r"\midrule",
+                *(" & ".join(row) + r" \\" for row in probe_sensitivity_rows),
+                r"\bottomrule",
+                r"\end{tabular}",
+                r"\end{center}",
+            ]
+        )
 
     lines.extend(
         [
@@ -919,13 +1658,14 @@ def main() -> None:
     lines.extend(
         [
             r"\subsection{Leave-one-host-out transfer}",
-            "B2 transfers the source host's median per-quantization coefficients "
+            "B2 fits median per-quantization coefficients on all non-target training "
+            "hosts "
             "and substitutes the untouched target host's bandwidth. The target "
             "set contains all eligible rows on that host; because most files also "
-            "occur on the source host, this isolates host/runtime transfer rather than "
-            r"a simultaneous model-and-hardware holdout. Q4\_K\_M is shared; the Mac "
-            r"Q4\_K test file uses the source-wide median fallback. The "
-            "second variant is the rejected absolute-time output-projection extension.",
+            "occur on at least one source host, this isolates host/runtime transfer "
+            "rather than a simultaneous model-and-hardware holdout. A target format "
+            "absent from all source training rows uses the source-wide median fallback. "
+            "The rejected two-term rows are the absolute-time output-projection extension.",
             r"\begin{center}",
             r"\small",
             r"\begin{tabular}{llrrrrr}",
@@ -937,8 +1677,8 @@ def main() -> None:
             r"\end{tabular}",
             r"\end{center}",
             "For context, target-fitted B2 gives all-row MAPE of "
-            f"{target_fitted_all['lun-mac']:.2f}\\% on Mac and "
-            f"{target_fitted_all['rtx5080']:.2f}\\% on RTX. Unlike the "
+            + target_fitted_summary
+            + ". Unlike the "
             "untouched-target transfer rows, these comparators mix training "
             "rows used to fit the target coefficients with held-out rows.",
         ]
@@ -1085,7 +1825,7 @@ def main() -> None:
     lines.extend(
         [
             r"\subsection{Prefill scope diagnostic}",
-            r"Depth 0 is the primary prefill fit and score. The same fitted coefficients are applied unchanged at larger existing-prefix depths. These errors are prediction errors, distinct from within-run prefill variability; the RTX held-out result is poor even before that distinction is considered.",
+            r"Depth 0 is the primary prefill fit and score. The same fitted coefficients are applied unchanged at larger existing-prefix depths. These errors are prediction errors, distinct from within-run prefill variability; results remain separated by host.",
             r"\begin{center}",
             r"\small",
             r"\begin{tabular}{llrrrrrr}",
@@ -1099,7 +1839,7 @@ def main() -> None:
             r"\begin{figure}[t]",
             r"\centering",
             r"\includegraphics[width=\textwidth]{supplement_summary.pdf}",
-            r"\caption{Host-separated diagnostics. Left: effective streamed bandwidth for the scored Qwen3.8-27B quantizations at zero prefix; host coverage differs, and IQ2 has 64 layers/26.90B parameters versus 65 layers/27.32B for the other shown files, so the set is a family comparison rather than a strictly identical-network quantization ladder. Right: P2 held-out error when depth-0 coefficients are applied at each existing-prefix depth. The RTX result is not pooled with the Apple result.}",
+            r"\caption{Host-separated diagnostics. Left: effective streamed bandwidth for the scored Qwen3.8-27B quantizations at zero prefix; host coverage differs, and IQ2 has 64 layers/26.90B parameters versus 65 layers/27.32B for the other shown files, so the set is a family comparison rather than a strictly identical-network quantization ladder. Right: P2 held-out error when depth-0 coefficients are applied at each existing-prefix depth. Host results are not pooled.}",
             r"\end{figure}",
         ]
     )
@@ -1112,7 +1852,7 @@ def main() -> None:
         split = (str(dec.loc[dec.model_file == name, "split"].iloc[0])
                  if name in scored else "probe only")
         measured_hosts = ", ".join(
-            "MB" if host == "lun-mac" else "RTX"
+            host_code(host)
             for host in hosts
             if ((dec.host == host) & (dec.model_file == name)).any()
         ) or "--"
@@ -1151,7 +1891,12 @@ def main() -> None:
 
     add_longtable(
         lines,
-        "Selected model identity, source, and file size. Sizes are exact bytes; host codes are MB (MacBook M4 Max) and RTX (RTX 5080), and ``probe only'' denotes a file excluded from every prediction fit and score.",
+        "Selected model identity, source, and file size. Sizes are exact bytes; "
+        "host codes are "
+        + ", ".join(
+            f"{host_code(host)} ({host_label(host)})" for host in hosts
+        )
+        + ", and ``probe only'' denotes a file excluded from every prediction fit and score.",
         "tab:model-id",
         r"@{}l l L{0.75in} L{2.7in} L{2.45in} L{0.9in} l r@{}",
         [
@@ -1165,8 +1910,7 @@ def main() -> None:
             f"reproduce every frozen metadata field used for the {len(identified)} "
             f"unique selected files ({len(scored)} scored and "
             f"{len(identified) - len(scored)} probe-only). Scored host coverage is "
-            "explicit because the two "
-            "measurement cohorts are not identical.",
+            "explicit because the measurement cohorts are not identical.",
         ],
     )
     add_longtable(
@@ -1326,9 +2070,9 @@ def main() -> None:
     lines.extend(
         [
             r"\section{Repeatability and calibration}",
-            "A separate repeatability series exists only for the MacBook M4 Max; RTX 5080 "
-            "variability is represented by the five within-invocation repetitions in "
-            "the row tables, not by an equivalent across-run series. "
+            "A separate repeatability series exists only for the MacBook Pro M4 Max; "
+            "variability on the other hosts is represented by the within-invocation "
+            "repetitions in the row tables, not by equivalent across-run series. "
             f"The six Mac runs give mean decode throughput {repeat_mean:.3f} tokens/s "
             f"and sample between-run CV {repeat_cv:.3f}\\%; prefill is "
             f"{repeat_prefill_mean:.3f} tokens/s with CV {repeat_prefill_cv:.3f}\\%. "
@@ -1348,7 +2092,7 @@ def main() -> None:
             r"\end{center}",
             "The append-only Mac measurement file also preserves a complete "
             "pre-protocol decode grid. It is excluded from every fit and score "
-            "above. The comparison is Mac-only and is not pooled with RTX data.",
+            "above. The comparison is MacBook-only and is not pooled with other hosts.",
             r"\begin{center}",
             r"\small",
             r"\begin{tabular}{lrrrrrrrr}",
@@ -1495,8 +2239,8 @@ def main() -> None:
             "FLOP/s scale cancels algebraically after fitting on this same host. "
             "It sets the scale of B0 and supports roofline interpretation; it does "
             "not by itself produce the reported fitted-model accuracy. The exported "
-            "row-level bandwidth field uses the device-copy result on both hosts. "
-            "The Mac LLM reference is retained as a diagnostic and is not the B0 "
+            "row-level bandwidth field uses the device-copy result on all hosts. "
+            "The LLM references are retained as diagnostics and are not the B0 "
             "bandwidth value used in the current exports.",
         ]
     )
@@ -1562,16 +2306,37 @@ def main() -> None:
     rtx_rows = dec[dec.host == "rtx5080"]
     rtx_largest = rtx_rows.loc[rtx_rows.bytes_total.astype(float).idxmax()]
     rtx_vram_gb = float(calibrations["rtx5080"]["torch_gpu"]["vram_gb"])
-    rtx_prefill = pf[pf.host == "rtx5080"]
-    rtx_prefill_over_gate = int(
-        (rtx_prefill.row_cv_pct > pd.to_numeric(rtx_prefill.max_cv_pct)).sum()
-    )
     heldout_by_host = {
         host: int(
             dec.loc[(dec.host == host) & (dec.split == "test"), "model_file"].nunique()
         )
         for host in hosts
     }
+    heldout_summary = english_join(
+        [
+            f"{heldout_by_host[host]} configurations on {host_label(host)}"
+            for host in hosts
+        ]
+    )
+    heldout_quants = sorted(
+        dec.loc[dec["split"] == "test", "quant"].astype(str).unique()
+    )
+    prefill_gate_summary = english_join(
+        [
+            (
+                f"{int((group.row_cv_pct > pd.to_numeric(group.max_cv_pct)).sum())} "
+                f"of {len(group)} on {host_label(host)}"
+            )
+            for host in hosts
+            for group in [pf[pf.host == host]]
+        ]
+    )
+    probe_count_summary = english_join(
+        [
+            f"{len(probes_by_host[host])} on {host_label(host)}"
+            for host in hosts
+        ]
+    )
     add_longtable(
         lines,
         "Exact inputs used to generate this appendix.",
@@ -1591,7 +2356,10 @@ def main() -> None:
     lines.extend(
         [
             r"\begin{itemize}",
-            r"\item The MacBook Pro M4 Max and RTX 5080 contributed unequal, overlapping cohorts. The planned Mac Studio has no rows in this dataset. Headline coefficients are fit separately by measured host. The leave-one-host-out audit therefore uses only two systems and does not establish universal transfer to new runtime stacks or formats.",
+            f"\\item {english_join(host_names)} contributed unequal, overlapping "
+            "cohorts. Headline coefficients are fit separately by measured host. "
+            "Each leave-one-host-out audit fits on all remaining measured hosts and "
+            "does not establish universal transfer to new runtime stacks or formats.",
             r"\item Every scored row records a requested \texttt{n\_gpu\_layers=99}, but no device-memory trace or runtime-reported resident-layer count was retained. This is a maximal-offload request, not proof of full accelerator residency; no partial-offload sweep or offload-cliff result exists.",
             f"\\item The largest RTX modeled file-plus-KV footprint is "
             f"{float(rtx_largest.bytes_total) / 1e9:.3f} GB for "
@@ -1599,20 +2367,25 @@ def main() -> None:
             + f" at depth {int(rtx_largest.n_depth):,}, while calibration reports "
             f"{rtx_vram_gb:.3f} GB of device memory. The differing accounting "
             "conventions further preclude a residency claim.",
-            r"\item The Mac rows use the placeholder commit value \texttt{nogit}; both runtime version queries returned usage lines rather than immutable \texttt{llama.cpp} revisions. The RTX project commit field is not itself a runtime binary revision.",
-            r"\item Manifest entries identify repository, filename, and byte size, but not immutable repository revisions or full-file hashes. Exact experimental replay is therefore not guaranteed.",
+            r"\item Runtime provenance is host-specific and is reproduced in the environment and auxiliary provenance files. Placeholder commits, project commits, and usage-text version output are not interpreted as immutable runtime-binary revisions.",
+            f"\\item The Studio acquisition records immutable repository revisions and "
+            f"per-file LFS SHA-256 identifiers for all {len(manifest)} manifest entries. "
+            "These identify the remote artifacts; they are not retrospective local-file "
+            "hashes for the earlier MacBook and RTX copies.",
             r"\item Derived parameter counts and per-depth KV bytes are consumed from the frozen metadata snapshot during appendix generation. This reproduces the analysis but is not a fresh, independent metadata extraction.",
-            f"\\item Held-out coverage is small: {heldout_by_host['lun-mac']} Mac "
-            f"and {heldout_by_host['rtx5080']} RTX configurations, all Q4-family. "
-            "Other quantization formats occur only in training data. No learning "
-            "curve establishes how many reference configurations suffice.",
+            f"\\item Held-out coverage is small: {heldout_summary}. Its observed "
+            "quantization formats are "
+            + ", ".join(tex(value) for value in heldout_quants)
+            + ". No learning curve establishes how many reference configurations suffice.",
             r"\item Decode MAPE treats three depths from each host--file configuration as observations; those rows are correlated. No narrow confidence claim is warranted.",
             f"\\item Prefill's primary result is restricted to depth 0. Larger-depth "
             "predictions are scope diagnostics because the equation has no existing-prefix "
-            f"term. The retry rule is decode-only, and {rtx_prefill_over_gate} of "
-            f"{len(rtx_prefill)} scored RTX prefill rows exceed 3\\% within-run CV; "
-            "the RTX prefill result should therefore be treated as both inaccurate and noisy.",
-            r"\item The three Q8 calibration probes are excluded only from the Mac fit and score; two corresponding files are scored on RTX. The 63.39-GB gpt-oss-120B Mac attempt is recorded as a prompt-batch decode failure and contributes no throughput row; it was not attempted on RTX.",
+            "term. The retry rule is decode-only; the counts of prefill rows above "
+            f"each host's declared CV gate are {prefill_gate_summary}.",
+            f"\\item Calibration-probe exclusions are host-specific ({probe_count_summary}). "
+            "Failed configurations and probe identities are listed above; a recorded "
+            "prompt-batch failure is not relabeled as an out-of-memory failure without "
+            "supporting telemetry.",
             r"\item Qwen3.8-27B IQ2 has 64 layers and 26.90B parameters, whereas the other shown Qwen3.8-27B files have 65 layers and 27.32B parameters. The quantization plot is therefore a near-family comparison, not a controlled bit-format substitution for one identical network.",
             r"\end{itemize}",
             "The metadata snapshot additionally records these parser/source Git object IDs:",

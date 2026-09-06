@@ -35,6 +35,7 @@ while this runs.
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -46,7 +47,8 @@ from scipy.optimize import least_squares
 # from this module are styled identically to the rest of the paper's without
 # copying the block.
 from .analyze import (ape, add_features, load_calibration, load_measurements,
-                      load_splits, select_primary_measurements)
+                      load_splits, select_primary_measurements,
+                      validate_host_coverage, validate_host_training_coverage)
 import matplotlib.pyplot as plt
 
 from .common import (FIGURES_DIR, MODELS_DIR, RESULTS_DIR, load_model_metadata,
@@ -58,7 +60,8 @@ from .common import (FIGURES_DIR, MODELS_DIR, RESULTS_DIR, load_model_metadata,
 # --------------------------------------------------------------------------
 
 def model_shapes(model_files: list[str], models_dir: Path,
-                 metadata: dict[str, dict] | None = None) -> pd.DataFrame:
+                 metadata: dict[str, dict] | None = None,
+                 prefer_live: bool = True) -> pd.DataFrame:
     """Load output-projection shapes from GGUFs or the audited snapshot.
 
     Neither is in the measurement CSV -- sweep.py's CSV_FIELDS predates this
@@ -68,10 +71,12 @@ def model_shapes(model_files: list[str], models_dir: Path,
     of token_embd.weight, which is present even in files whose architecture
     omits a vocab_size metadata key (every Qwen3.x file here does).
 
-    Live GGUF metadata takes precedence. The snapshot preserves vocab and model
-    width on disk-constrained clean clones. Older snapshots may omit optional
-    embedding-layout fields; in that case only the streamed-embedding ablation
-    is unavailable, and a warning is emitted.
+    Live GGUF metadata takes precedence by default. Set ``prefer_live=False``
+    for publication regeneration so installed files cannot change frozen
+    results. The snapshot preserves vocab and model width on disk-constrained
+    clean clones. Older snapshots may omit optional embedding-layout fields; in
+    that case only the streamed-embedding ablation is unavailable, and a warning
+    is emitted.
     """
     from gguf import GGUFReader  # lazy, matching common.read_gguf_meta
 
@@ -81,7 +86,7 @@ def model_shapes(model_files: list[str], models_dir: Path,
         path = models_dir / name
         snapshot = metadata.get(name) or {}
         shape = None
-        if path.is_file():
+        if prefer_live and path.is_file():
             try:
                 meta = read_gguf_meta(path)
                 reader = GGUFReader(str(path))
@@ -162,7 +167,8 @@ def collapse_repeats(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def load_rows(results_dir: Path = RESULTS_DIR, models_dir: Path = MODELS_DIR,
-              collapse: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+              collapse: bool = True, *, require_exact_hosts: bool = True,
+              prefer_live: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Decode rows with per-row effective bandwidth and back-solved eta.
 
     Effective bandwidth is what the machine actually delivered on this cell:
@@ -170,14 +176,22 @@ def load_rows(results_dir: Path = RESULTS_DIR, models_dir: Path = MODELS_DIR,
     Both are per row, so the cross-model variation of 5.7 can be read straight
     off the frame without going through any fit.
     """
-    df = load_measurements(results_dir)
+    # Preserve the publication default (quality-aware loader selection followed
+    # by the historical collapse), while making --keep-all a real diagnostic
+    # opt-out instead of discarding repeats before this function sees them.
+    df = load_measurements(results_dir, deduplicate=collapse)
     cal = load_calibration(results_dir)
     if not cal:
         raise SystemExit(f"No calibration_*.json in {results_dir}. "
                          f"Run `python -m llmperf.calibrate` first.")
+    # The refinement CLI writes publication artifacts. Default to an exact host
+    # join, while retaining an explicit opt-out for library callers operating on
+    # an intentional row subset.
+    validate_host_coverage(df, cal, require_exact=require_exact_hosts)
+    expected_hosts = set(df["host"].dropna().astype(str))
     metadata = load_model_metadata(results_dir)
     df = add_features(df, cal, load_splits(models_dir, results_dir),
-                      metadata, models_dir)
+                      metadata, models_dir, prefer_live=prefer_live)
 
     all_dec = df[(df["phase"] == "decode") & df["bw"].notna()].reset_index(drop=True)
     dec = select_primary_measurements(all_dec).reset_index(drop=True)
@@ -187,12 +201,15 @@ def load_rows(results_dir: Path = RESULTS_DIR, models_dir: Path = MODELS_DIR,
     # eta is 1.0 by construction on the llm_ref probe model; keeping it would
     # flatter every number below. analyze.py drops it for the same reason.
     dec = dec[~dec["is_calibration_probe"]].reset_index(drop=True)
+    validate_host_training_coverage(
+        dec, expected_hosts, context="refinement decode host-adapted fit")
 
     dis = pd.DataFrame()
     if collapse:
         dec, dis = collapse_repeats(dec)
 
-    shapes = model_shapes(dec["model_file"].tolist(), models_dir, metadata)
+    shapes = model_shapes(dec["model_file"].tolist(), models_dir, metadata,
+                          prefer_live=prefer_live)
     dec = dec.merge(shapes, on="model_file", how="left")
 
     dec["t_meas"] = 1.0 / dec["avg_ts"]
@@ -408,9 +425,12 @@ def leave_one_machine_out_b2(
     """Transfer the paper's median-ratio B2 coefficients to an unseen host.
 
     The main predictor fits one median efficiency per host and quantization.
-    With the target host held out, use the source-host coefficient for the same
-    quantization and a source-wide median for a format absent from training.
-    This is distinct from the least-squares refinement experiment above.
+    With the target host held out, first fit that coefficient independently on
+    every source host, then take the median across source hosts.  The two-stage
+    aggregation gives each source machine one vote even when their cohort sizes
+    differ.  A source-host-balanced median is also used for a format absent from
+    training.  This is distinct from the least-squares refinement experiment
+    above.
     """
     hosts = sorted(df["host"].unique())
     if len(hosts) < 2:
@@ -424,13 +444,26 @@ def leave_one_machine_out_b2(
         held = df[df["host"] == host]
         if target_split is not None:
             held = held[held["split"] == target_split]
+        source_hosts = sorted(train["host"].dropna().unique())
+        provenance = {
+            "source_hosts": json.dumps(source_hosts, separators=(",", ":")),
+            "n_source_hosts": len(source_hosts),
+        }
         if train.empty or held.empty:
-            rows.append({"held_out_host": host, "n_train": len(train),
+            rows.append({"held_out_host": host, **provenance,
+                         "n_train": len(train),
                          "n_held": len(held), "MAPE_%": np.nan})
             continue
-        eta = (train["avg_ts"] * train["bytes_active"] / train["bw"]
-               ).groupby(train["quant"]).median()
-        fallback = float(eta.median())
+        row_eta = train["avg_ts"] * train["bytes_active"] / train["bw"]
+        eta_by_host_quant = row_eta.groupby(
+            [train["host"], train["quant"]]).median()
+        eta = eta_by_host_quant.groupby(level=1).median()
+        # If the target contains a quantization absent from every source, first
+        # reduce each source host to one typical coefficient.  Taking the median
+        # of those values preserves the same equal-host weighting as the normal
+        # same-quant path.
+        fallback = float(
+            eta_by_host_quant.groupby(level=0).median().median())
         transferred = np.array([float(eta.get(q, fallback))
                                 for q in held["quant"]])
         prediction = (transferred * held["bw"].to_numpy(float)
@@ -438,6 +471,7 @@ def leave_one_machine_out_b2(
         error = ape(prediction, held["avg_ts"].to_numpy(float))
         rows.append({
             "held_out_host": host,
+            **provenance,
             "n_train": len(train),
             "n_held": len(held),
             "MAPE_%": error.mean(),
@@ -451,48 +485,70 @@ def leave_one_machine_out_b2(
 # figure
 # --------------------------------------------------------------------------
 
+def eta_variation_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """One eta summary per host/model, never a cross-host median."""
+    d = df[["host", "quant", "model_name"]].copy()
+    d["eta"] = df["eta"].to_numpy(float)
+    return (d.groupby(["host", "quant", "model_name"])["eta"].median()
+            .reset_index().dropna(subset=["eta"]))
+
+
 def fig_eta_variation(df: pd.DataFrame, out: Path) -> bool:
     """eta per model, grouped by quantisation -- 5.7 at a glance.
 
     If eta were a property of the format, every bar inside a group would be the
     same height. The figure exists because they are not.
     """
-    d = df[["host", "quant", "model_name"]].copy()
-    d["eta"] = df["eta"].to_numpy(float)
-    per_model = (d.groupby(["quant", "model_name"])["eta"].median()
-                 .reset_index().dropna(subset=["eta"]))
+    per_model = eta_variation_rows(df)
     if per_model.empty:
         return False
 
+    hosts = sorted(per_model["host"].unique())
     quants = sorted(per_model["quant"].unique())
     models = sorted(per_model["model_name"].unique())
     colours = plt.get_cmap("tab20")(np.linspace(0, 1, max(len(models), 2)))
     cmap = dict(zip(models, colours))
 
-    fig, ax = plt.subplots(figsize=(7.2, 4.2))
-    widest = max(len(per_model[per_model["quant"] == q]) for q in quants)
-    width = 0.82 / widest
+    fig, axes = plt.subplots(
+        len(hosts), 1, figsize=(7.2, max(4.2, 2.55 * len(hosts))),
+        sharex=True, sharey=True, squeeze=False,
+    )
+    axes = axes.ravel()
     seen = set()
-    for i, q in enumerate(quants):
-        g = per_model[per_model["quant"] == q].sort_values("model_name")
-        for j, (_, r) in enumerate(g.iterrows()):
-            x = i + width * (j - (len(g) - 1) / 2)  # centre the group on its tick
-            ax.bar(x, r["eta"], width * 0.92, color=cmap[r["model_name"]],
-                   label=r["model_name"] if r["model_name"] not in seen else None)
-            seen.add(r["model_name"])
-        if len(g) > 1:
-            lo, hi = g["eta"].min(), g["eta"].max()
-            ax.annotate(f"{hi / lo:.2f}x", (i, hi), textcoords="offset points",
-                        xytext=(0, 4), ha="center", fontsize=7.5)
+    legend_handles, legend_labels = [], []
+    host_names = {"lun-mac": "MacBook M4 Max",
+                  "mac-studio-m4-max": "Mac Studio M4 Max",
+                  "rtx5080": "RTX 5080"}
+    for ax, host in zip(axes, hosts):
+        hd = per_model[per_model["host"] == host]
+        widest = max(len(hd[hd["quant"] == q]) for q in quants)
+        width = 0.82 / max(1, widest)
+        for i, q in enumerate(quants):
+            g = hd[hd["quant"] == q].sort_values("model_name")
+            for j, (_, row) in enumerate(g.iterrows()):
+                x = i + width * (j - (len(g) - 1) / 2)
+                model = row["model_name"]
+                bars = ax.bar(x, row["eta"], width * 0.92, color=cmap[model])
+                if model not in seen:
+                    legend_handles.append(bars[0])
+                    legend_labels.append(model)
+                    seen.add(model)
+            if len(g) > 1:
+                lo, hi = g["eta"].min(), g["eta"].max()
+                ax.annotate(f"{hi / lo:.2f}x", (i, hi),
+                            textcoords="offset points", xytext=(0, 4),
+                            ha="center", fontsize=7.5)
+        ax.set_ylim(0, per_model["eta"].max() * 1.45)
+        ax.set_ylabel(r"back-solved $\eta_d$")
+        ax.set_title(host_names.get(host, host), loc="left", fontweight="bold")
+        ax.axhline(1.0, color="k", lw=.8, ls="--", alpha=.6)
 
-    ax.set_xticks(range(len(quants)))
-    ax.set_xticklabels(quants, rotation=30, ha="right")
-    ax.set_ylim(0, per_model["eta"].max() * 1.45)  # headroom for the legend
-    ax.set_ylabel(r"back-solved $\eta_d$  (fraction of calibrated roofline)")
-    ax.set_title(r"$\eta$ is not a property of the quantisation format alone"
-                 "\n(one bar per model; label = max/min inside the group)")
-    ax.axhline(1.0, color="k", lw=.8, ls="--", alpha=.6)
-    ax.legend(fontsize=6, ncol=3, loc="upper left", framealpha=.9)
+    axes[-1].set_xticks(range(len(quants)))
+    axes[-1].set_xticklabels(quants, rotation=30, ha="right")
+    axes[0].legend(legend_handles, legend_labels, fontsize=6, ncol=3,
+                   loc="upper left", framealpha=.9)
+    fig.suptitle(r"$\eta$ is not a property of the quantisation format alone"
+                 "\n(one bar per host and model; label = within-host max/min)")
     fig.savefig(out)
     plt.close(fig)
     return True
@@ -516,7 +572,9 @@ def main(argv=None) -> int:
         _selfcheck()
         return 0
 
-    dec, dis = load_rows(args.results, args.models_dir, collapse=not args.keep_all)
+    dec, dis = load_rows(args.results, args.models_dir,
+                         collapse=not args.keep_all,
+                         require_exact_hosts=True, prefer_live=False)
     if dec.empty:
         raise SystemExit("No decode rows with calibration. Nothing to fit.")
 
@@ -534,9 +592,12 @@ def main(argv=None) -> int:
     if missing:
         print(f"no GGUF on disk for {len(missing)} measured model(s): "
               f"{', '.join(missing)} -- excluded from the two-term comparison\n")
+    represented_hosts = set(dec["host"].dropna().astype(str))
     dec = dec.dropna(subset=["vocab_size", "flops"]).reset_index(drop=True)
     if dec.empty:
         raise SystemExit("No rows with both a GGUF and a compute calibration.")
+    validate_host_training_coverage(
+        dec, represented_hosts, context="refinement output-term host-adapted fit")
 
     # ---- 1. per-row effective bandwidth ---------------------------------
     print("=== per-model effective bandwidth and eta (median over KV depths) ===")
@@ -570,9 +631,6 @@ def main(argv=None) -> int:
 
     # ---- 2. one-term vs two-term ----------------------------------------
     train = dec[dec["split"] == "train"]
-    if train.empty:
-        print("\nWARNING: no TRAIN rows; fitting on everything.")
-        train = dec
 
     f1 = fit_model(train, use_output_term=False)
     f2 = fit_model(train, use_output_term=True)

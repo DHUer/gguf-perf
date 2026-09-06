@@ -10,8 +10,11 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{balance}
 \urlstyle{same}
+\let\standardthebibliography\thebibliography
+\renewcommand{\thebibliography}[1]{%
+  \standardthebibliography{#1}\setlength{\itemsep}{-0.2pt}}
 
-\title{GGUF-METADATA PREDICTION OF SINGLE-SEQUENCE LLAMA.CPP THROUGHPUT ACROSS TWO SYSTEMS}
+\title{GGUF-METADATA PREDICTION OF SINGLE-SEQUENCE LLAMA.CPP THROUGHPUT ACROSS THREE SYSTEMS}
 \name{Author Name}
 \address{Affiliation\\author@example.com}
 
@@ -23,16 +26,16 @@
 \begin{abstract}
 We predict single-sequence model throughput from GGUF metadata using
 roofline-shaped predictors with quantization-specific scale factors fitted on
-reference models.  The selected cohort comprises 216 phase--depth measurements
-on a MacBook Pro M4 Max and an NVIDIA RTX 5080.  On host-specific held-out sets of
-four and two configurations, an active-parameter decode model obtains 13.1\%
-and 36.1\% mean absolute percentage error (MAPE), versus 49.4\% and 51.9\% when
-charging total parameters.  Cross-host coefficient transfer yields 13.9\% and
-36.7\% test MAPE, but over all target rows its error is 20.8--21.7\%, versus
-11.0--13.8\% after target fitting.  A low-bit model ladder changes ordering
-across host/runtime stacks.  The P2 prefill baseline is unsupported on RTX, where
-held-out error reaches 108.2\% versus 18.7\% on the MacBook.  GGUF structure
-helps on both systems, but fitted efficiencies are not universal.
+reference models.  The scored cohort comprises 318 phase--depth measurements
+from 53 host--file configurations on two Apple M4 Max systems and an NVIDIA RTX
+5080.  On host-specific held-out sets of four, five, and two configurations, an
+active-parameter decode model obtains 13.1\%, 14.4\%, and 36.1\% mean absolute
+percentage error (MAPE), versus 49.4\%, 55.3\%, and 51.9\% when charging total
+parameters.  Leave-one-host-out coefficients fitted on the other two systems
+yield 11.6\%, 16.8\%, and 36.0\% test MAPE.  A low-bit model ladder changes
+ordering across runtime stacks.  The P2 prefill baseline gives 18.7\%, 22.2\%,
+and 108.2\% test MAPE.  GGUF structure helps on all three systems, but fitted
+efficiencies are not universal.
 \end{abstract}
 
 \begin{keywords}
@@ -56,7 +59,7 @@ We ask which parts of such a predictor transfer across model families and
 hardware.  Our first contribution is a host-adapted decode model whose target
 features---file size, tensor shapes, expert routing, and per-layer attention
 metadata---are available before inference.  We evaluate a frozen family split
-on both unified-memory Apple Silicon and a discrete NVIDIA GPU.  Second, we
+on two unified-memory Apple systems and a discrete NVIDIA GPU.  Second, we
 isolate the benefit of activated-parameter and per-layer KV accounting.  Third,
 we report transfer limits rather than hiding them in a pooled score: one-term
 coefficients only partly transfer, low-bit behavior varies by system, and
@@ -64,7 +67,7 @@ the tested prefill model does not replicate on RTX.
 
 LLMCompass explores accelerator design \cite{zhang2024llmcompass}.  Vidur
 combines profiling with serving simulation \cite{agrawal2024vidur}.
-RooflineBench and LIMINAL apply hardware-aware analysis to local LLM inference
+RooflineBench and LIMINAL apply hardware-aware analysis to LLM inference
 \cite{bi2026rooflinebench,davies2025liminal}.
 MoE-CAP argues that sparse utilization should be measured over activated rather
 than stored parameters \cite{jiang2025moecap}; we test the predictive effect of
@@ -78,8 +81,8 @@ specification \cite{ggufspec}.
 \begin{figure*}[!t]
   \centering
   \includegraphics[width=\textwidth]{../../figures/paper/fig1_accuracy.pdf}
-  \caption{B2 decode predictions, separated by host.  The 99 points comprise
-  57 MacBook and 42 RTX observations, with 81 training and 18 held-out; dashed
+  \caption{B2 decode predictions, separated by host.  The 159 points comprise
+  57 MacBook, 60 Studio, and 42 RTX observations, with 126 training and 33 held-out; dashed
   lines mark $\pm25\%$.  Open markers are MoE and orange markers are held-out.}
   \label{fig:accuracy}
 \end{figure*}
@@ -134,7 +137,7 @@ tests, not part of the fit.
   \includegraphics[width=\textwidth]{../../figures/paper/fig2_mechanisms.pdf}
   \caption{Structural corrections.  (a) Bars are host-specific held-out MAPE;
   overlaid points are per-configuration means across three depths and expose
-  the four-versus-two test sizes.  (b) From GGUF metadata, treating every layer
+  the four-, five-, and two-configuration test sizes.  (b) From GGUF metadata, treating every layer
   as global overstates 16K KV bytes by as much as $13.7\times$.}
   \label{fig:mechanisms}
 \end{figure*}
@@ -144,7 +147,7 @@ tests, not part of the fit.
   \includegraphics[width=\textwidth]{../../figures/paper/fig3_scope.pdf}
   \caption{Transfer diagnostics.  (a) The back-solved depth-zero ratio
   $T_dD/B_h$ for one Qwen family varies across systems; RTX covers the first
-  four formats.  The crossed Mac Q8 point is a historical reference probe,
+  four formats.  The crossed Apple Q8 points are historical reference probes,
   shown for ladder context but excluded from fitting and scoring.  (b) P2
   prefill error is host-specific, remains poor on RTX, and rises by 16K.}
   \label{fig:scope}
@@ -153,31 +156,26 @@ tests, not part of the fit.
 \section{Experimental method}
 \label{sec:method}
 
-The first host is a MacBook Pro M4 Max with 64~GB unified memory; its 12
-performance cores are used as benchmark threads.  Device-copy bandwidth and FP16 matrix calibration are
-380.1~GB/s and 13.95~TFLOP/s.  The second is an RTX 5080 with 16,302~MiB reported
-VRAM, CUDA, and 16 threads; device-copy and FP16 calibrations are 801.1~GB/s and
-118.83~TFLOP/s.  The managed RTX runner directory is labeled b10794, but its
-version query returned usage text rather than an independently verified
-runtime revision; the Mac revision was likewise not recovered.
+The hosts are a 64-GB MacBook Pro M4 Max and a 128-GB Mac Studio M4 Max, each
+using 12 performance-core threads, plus an RTX 5080 with 16,302~MiB reported
+VRAM, CUDA, and 16 threads.  Their device-copy/FP16 matrix calibrations are
+380.1~GB/s and 13.95~TFLOP/s, 396.7~GB/s and 15.00~TFLOP/s, and 801.1~GB/s and
+118.83~TFLOP/s, respectively.  The Studio binary is from the hash-recorded
+official b10794 archive.  The managed RTX directory is labeled b10794, but its
+version query returned usage text; the legacy MacBook revision was not recovered.
 
-The Mac manifest has 23 GGUF files; 22 files produced successful rows.  After
-excluding three historical LLM reference probes, scoring uses
-15 training and four held-out configurations from 12 base families.  RTX
-covers 14 matching files from eight base families, scored as 12 training and
-two held-out configurations.  Both test sets contain dense and MoE families
-absent from training, but only Q4 variants; RTX's two test files are a
-particularly small replication.  Results are therefore reported by host, never
-as a cohort-size-weighted headline.  We retain the pre-specified Mac probe
-exclusion even though final exports use copy bandwidth; including those Q8
-training probes leaves test B2 unchanged (supplement).  Splits are fixed by
-base family before fitting, so all formats of a family share a label.  The
-remaining 63.39-GB gpt-oss-120B file produced two prompt-batch failures, not a
-demonstrated out-of-memory failure.  The supplement lists every model-card
-repository, exact filename, and byte size; the evaluated repositories are
-cited here \cite{museglimmer_card,nemotron4_card,nemotron30_card,qwen35_4_card,
-qwen35_9_card,qwen36_card,qwen38_card,smollm3_card,gemma12_card,gemma26_card,
-gptoss20_card,lingmini_card}.
+The shared manifest has 23 GGUF files.  The MacBook produced 22 successful
+grids; after three pre-specified reference-probe exclusions, it contributes 15
+training and four held-out configurations.  Studio completed all 23 grids and
+contributes 15 and five after the same exclusions.  RTX covers 14 matching files,
+split 12 and two.  The 53 scored configurations span 22 files; each held-out set
+contains dense and MoE families absent from training, though RTX remains a small
+replication.  Results are therefore host-separated.  Splits are fixed by base
+family before fitting.  The 63.39-GB gpt-oss-120B file produced two prompt-batch
+failures on MacBook, not a demonstrated out-of-memory failure, and a complete
+grid on Studio.  The supplement lists every file, source URL, revision, and byte
+size; source organizations are cited here \cite{unsloth_models,lmstudio_models,
+ggmlorg_models,google_models,bartowski_models}.
 
 All reported throughput is single-sequence.  Each configuration runs in a
 fresh process.  At prefix depths 0, 4096, and 16384, \texttt{llama-bench}
@@ -190,13 +188,11 @@ an atomic selector that prefers complete protocol rows and then lower decode
 coefficient of variation (CV)
 and pre-run load, without inspecting prediction residuals.
 
-The stability gate applies to decode.  RTX's 42 selected decode rows have
-0.43\% median and 1.65\% maximum within-cell CV;
-Mac has 0.83\% median and one
-of 66 rows at 3.04\%.  Prefill was not gated: 29 of 42 RTX rows exceed 3\% CV
-and the maximum is 39.2\%.  We retain those observations to expose the protocol
-failure and give a median-sample sensitivity below.  MAPE is computed over the
-fixed split; each decode configuration contributes its three depths.
+The stability gate applies to decode.  Across all selected rows, median decode
+CV is 0.83\%, 0.42\%, and 0.43\% on MacBook, Studio, and RTX; maxima are 3.04\%,
+2.30\%, and 1.65\%.  Prefill was not gated: 8/66, 0/69, and 29/42 rows exceed 3\%,
+with maxima 4.84\%, 0.96\%, and 39.2\%.  We retain them and give a median-sample
+sensitivity below.  Each decode configuration contributes its three depths.
 
 \section{Results}
 \label{sec:results}
@@ -214,6 +210,8 @@ Host & Split (cfg.) & B0 & B1 & B2 & P1 & P2\\
 \midrule
 MacBook & train (15) & 33.6 & 15.8 & \textbf{10.4} & 6.8 & \textbf{4.1}\\
         & test (4)   & 46.9 & 49.4 & \textbf{13.1} & 22.7 & \textbf{18.7}\\
+Studio & train (15) & 33.0 & 17.8 & \textbf{12.4} & 7.0 & \textbf{4.3}\\
+       & test (5)   & 58.0 & 55.3 & \textbf{14.4} & 28.0 & \textbf{22.2}\\
 RTX 5080 & train (12) & 20.3 & \textbf{9.8} & 10.1 & 14.5 & \textbf{5.9}\\
          & test (2)   & 41.7 & 51.9 & \textbf{36.1} & 124.5 & 108.2\\
 \bottomrule
@@ -223,99 +221,87 @@ RTX 5080 & train (12) & 20.3 & \textbf{9.8} & 10.1 & 14.5 & \textbf{5.9}\\
 \subsection{Host-adapted decode}
 
 Figure~\ref{fig:accuracy} and Table~\ref{tab:error} show the primary result.
-On the MacBook, B2 achieves 10.4\% train and 13.1\% test MAPE; on RTX, it
-achieves 10.1\% and 36.1\%.
-The RTX test median and maximum are 25.8\% and 69.0\%; its dense Nemotron 4B
-and MoE Ling tests average 20.4\% and 51.9\%, respectively.  The Mac
-test set has two additional files; on the exact two-file intersection, Mac
-MAPE is 18.2\% versus RTX's 36.1\%.  This remains a small replication, although
-B2 improves over B1 on both hosts.
+B2 train/test MAPE is 10.4/13.1\% on MacBook, 12.4/14.4\% on Studio, and
+10.1/36.1\% on RTX.  RTX test median/maximum error is 25.8/69.0\%.  On the exact
+two-file intersection shared by all hosts, MAPE is 18.2\%, 20.1\%, and 36.1\%,
+respectively.  RTX remains the smallest replication, but B2 improves on B1 for
+every held-out host.
 
 Active-weight accounting substantially improves the held-out aggregate
-(Fig.~\ref{fig:mechanisms}a): B1's errors of 49.4\% and 51.9\% fall to 13.1\%
-and 36.1\%.  The effect is strongest for MoE cases: RTX's single held-out MoE
-file falls from 83.3\% to 51.9\%, while its dense file remains at 20.4\%.
-Capacity is controlled by stored parameters, whereas per-token weight traffic
-is closer to activated parameters.  Separately, Eq.~\eqref{eq:kv} avoids the
+(Fig.~\ref{fig:mechanisms}a): B1 errors of 49.4\%, 55.3\%, and 51.9\% fall to
+13.1\%, 14.4\%, and 36.1\%.  Capacity is controlled by stored parameters,
+whereas per-token weight traffic is closer to activated parameters.  Separately,
+Eq.~\eqref{eq:kv} avoids the
 $10.7$--$13.7\times$ cache overestimates produced by a uniform-global formula
 for the two Gemma-4 examples (Fig.~\ref{fig:mechanisms}b).  After refitting each
 variant, per-layer rather than uniform-global KV lowers held-out MAPE from
-21.2\% to 13.1\% on Mac and from 37.9\% to 36.1\% on RTX.
+21.2\% to 13.1\% on MacBook, 21.0\% to 14.4\% on Studio, and 37.9\% to 36.1\% on RTX.
 
 \begin{figure*}[!t]
   \centering
   \includegraphics[width=\textwidth]{../../figures/paper/fig8_quality_vs_error.pdf}
-  \caption{Measurement diagnostics.  (a) Pooled decode CV shows no obvious descriptive association
-  with B2 error across the 99 scored rows; the dotted line is the 3\% target.
-  (b) Row-level CV distributions use all 216 selected rows, including 18 Mac
-  reference-probe rows, and expose that the gate covered decode (D), not prefill (P).}
+  \caption{Measurement diagnostics.  (a) Host-separated decode CV shows no obvious descriptive association
+  with B2 error across 159 scored rows; the dotted line is the 3\% target.
+  (b) Row-level CV distributions use all 354 selected rows, including 36 Apple
+  reference-probe rows; labels count rows above the target.  The gate covered
+  decode (D), not prefill (P).}
   \label{fig:quality}
 \end{figure*}
 
 \subsection{Cross-host transfer is incomplete}
 
 Separate fitting should not be confused with hardware generalization.  In a
-leave-one-host-out coefficient-transfer diagnostic, we fit B2's median ratios
-on one machine and substitute the other machine's calibrated bandwidth.  Across
-all target rows not used to fit source coefficients, MAPE is 20.8\% for 57 Mac
-rows and 21.7\% for 42 RTX rows (medians
-15.4\% and 18.7\%); target-fitted B2 gives 11.0\% and 13.8\% on those same
-all-row cohorts.  Restricted to target test families, transfer gives
-13.9\% on Mac and 36.7\% on RTX, close to the target-fitted 13.1\% and 36.1\%.
-The shared Q4\_K\_M factor therefore transfers in this narrow test; the Mac
-Q4\_K test file instead uses the source-wide median fallback.
-The all-row test is easier than a simultaneous model-and-host holdout because
-most target files also occur on the source host.
+leave-one-host-out diagnostic, B2 coefficients are fitted independently on the
+other two machines, given equal source-host weight, and paired with the target's
+calibrated bandwidth.  All-target MAPE is 14.5\%, 15.4\%, and 20.8\% for 57
+MacBook, 60 Studio, and 42 RTX rows; target-fitted B2 gives 11.0\%, 12.9\%, and
+13.8\%.  Restricted to target test families, transfer gives 11.6\%, 16.8\%, and
+36.0\%, close to target-fitted 13.1\%, 14.4\%, and 36.1\%.  This test is easier
+than simultaneous model-and-host holdout because most target files occur on a
+source host.
 
-The 14 matched configurations span eight base families and weight each observed
-format equally; this descriptive set includes two Mac calibration-probe files
-excluded from prediction scoring.
-RTX/Mac geometric
-mean throughput is $2.15\times$ for zero-prefix decode, close to the
-$2.11\times$ copy-bandwidth ratio, and $7.21\times$ for prefill versus an
-$8.52\times$ compute ratio.  Yet configuration-level decode ratios span
-$1.76$--$3.26\times$, ruling out one universal multiplier.  Context also changes
-the ratios: their geometric means reach $2.30\times$ decode and $9.60\times$
-prefill at 16K.
+The 14 three-way matched configurations span eight base families and weight each
+format equally.  Across 22 MacBook--Studio matches, Studio/MacBook geometric-mean
+zero-prefix throughput is $1.02\times$ for both decode and prefill.  RTX/MacBook
+is $2.15\times$ for decode, near the $2.11\times$ copy-bandwidth ratio, and
+$7.21\times$ for prefill versus an $8.52\times$ compute ratio.  Configuration-level
+decode ratios span $1.76$--$3.26\times$, ruling out one universal multiplier.
 
-The near-family Qwen3.8-27B ladder varies across the two host/runtime stacks
+The near-family Qwen3.8-27B ladder varies across the three host/runtime stacks
 (Fig.~\ref{fig:scope}a).  IQ2 has 1.55\% fewer parameters and one fewer layer.
-On Mac, Q2 is only 2.2\% faster than IQ2 at depth zero (24.08 versus
-23.57 tok/s), a gap comparable to timing variation; on RTX, IQ2 is 13.7\%
-faster (76.76 versus 67.48 tok/s).  At depth zero, across the three conventional
-Q4/Q8 pairs, Q4 is
-$1.32$--$1.43\times$ faster on Mac and $1.37$--$1.49\times$ on RTX, while its
+On both Apple hosts, Q2 is only 2.2\% faster than IQ2 at depth zero, whereas on
+RTX, IQ2 is 13.7\% faster.  Across the three conventional Q4/Q8 pairs, Q4 is
+$1.32$--$1.43\times$ faster on MacBook, $1.29$--$1.41\times$ on Studio, and
+$1.37$--$1.49\times$ on RTX, while its
 prefill rate is usually slightly lower.  File compression alone therefore does
 not specify kernel efficiency.
 
 \subsection{Prefill is a negative result}
 
-P1/P2 reach 22.7\%/18.7\% held-out zero-prefix MAPE on Mac and
-124.5\%/108.2\% on RTX (Fig.~\ref{fig:scope}b); on the exact two-file
-intersection, Mac P2 is 12.6\%.
+P1/P2 held-out zero-prefix MAPE is 22.7/18.7\% on MacBook, 28.0/22.2\% on
+Studio, and 124.5/108.2\% on RTX (Fig.~\ref{fig:scope}b).
 The RTX result is not solely the 39.2\%-CV Ling cell:
 replacing every cell mean by its five-sample median and refitting still gives
 85.5\%.  At 16K, where Eq.~\eqref{eq:prefill} omits prefix-dependent work, test
-error rises to 76.2\% on Mac and 133.3\% on RTX.  Ten of 11 Mac and six of
-eight RTX quantization groups contain only one training configuration, so the
-per-format coefficients are weakly identified and P2's low 4.1\% and 5.9\%
-training errors are partly resubstitution.  We consequently treat prefill as
+error rises to 76.2\% on MacBook, 68.1\% on Studio, and 133.3\% on RTX.  Most
+host--quantization groups contain only one training configuration, so the
+per-format coefficients are weakly identified and P2's low 4.1--5.9\% training
+errors are partly resubstitution.  We consequently treat prefill as
 unsupported under this protocol, not as a successful second regime.
 
 \subsection{Protocol and robustness checks}
 
 Decode behaves more consistently than its largest residuals.  Every scored
 configuration slows monotonically with context.  B2 held-out MAPE falls from
-17.9\% to 8.6\% between depth zero and 16K on Mac, and from 44.5\% to 25.6\%
-on RTX.  Across all 99 scored decode rows, within-run CV shows no obvious
-descriptive association with residual error (pooled Spearman $\rho=-0.09$;
-host-specific values are $-0.14$ and $0.16$ for Mac and RTX, respectively;
+17.9\% to 8.6\% between depth zero and 16K on MacBook, 18.1\% to 9.7\% on Studio,
+and 44.5\% to 25.6\% on RTX.  Across all 159 scored decode rows, within-run CV
+shows no obvious descriptive association with residual error (pooled Spearman
+$\rho=-0.05$; host values are $-0.14$, $0.01$, and $0.16$;
 Fig.~\ref{fig:quality}), and within-run scatter is much smaller than the largest
 residuals.
 
-Correlated depth rows and the missing RTX between-run study prevent
-a stronger noise attribution.  The supplement reports a rejected additive
-output-projection sensitivity analysis.
+Correlated depth rows and absent Studio/RTX between-run studies limit noise
+attribution.  The supplement reports a rejected output-projection extension.
 
 \section{Limitations and conclusion}
 \label{sec:conclusion}
@@ -326,18 +312,18 @@ often have one training family, IQ2's Qwen file has 1.55\% fewer parameters
 than the rest of that ladder, and execution order was not randomized.  The
 largest RTX analytical working set exceeds reported VRAM before graph buffers,
 so requested full layer offload is not proof of physical residency.  No GPU
-clock, power, or spill telemetry was recorded, and model revisions and full
-hashes were not frozen.  These limitations preclude a universal runtime
+clock, power, or spill telemetry was recorded.  Studio files were SHA-verified
+against repository LFS identifiers; equivalent immutable captures are
+unavailable for the legacy hosts.  These limitations preclude a universal runtime
 accuracy claim.  All error summaries are descriptive, not population confidence
 estimates.  The $SP_a/P$ proxy also scales shared tensors with expert tensors
 and assumes balanced $k/E$ routing; tensor-level active-byte validation was
 unavailable.  No learning curve establishes how many reference configurations
 are sufficient.
 
-Within that boundary, GGUF structure is useful: active-weight and metadata-aware
-KV corrections reduce held-out aggregate decode error in these cohorts, and the
-tested Q4\_K\_M factor transfers with little additional loss
-after target bandwidth calibration.  Observed host/runtime-stack differences
+Within that boundary, active-weight and metadata-aware KV corrections reduce
+held-out decode error in all three cohorts; source-host-balanced coefficients
+remain close after target bandwidth calibration.  Host/runtime-stack differences
 in low-bit behavior argue against a universal coefficient; differing runtime
 versions and IQ2's slightly different architecture remain confounds.  Next work
 should record residency and broaden the cohort.

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import math
 import os
 import platform
@@ -62,9 +63,20 @@ def check_deps() -> None:
     else:
         check("python deps", PASS, ", ".join(versions))
 
+    apple_silicon = platform.system() == "Darwin" and platform.machine() == "arm64"
     try:
         import torch
-        if torch.cuda.is_available():
+        if apple_silicon:
+            mps = getattr(getattr(torch, "backends", None), "mps", None)
+            if mps and mps.is_available():
+                check("torch mps", PASS,
+                      f"Metal/MPS available, torch {torch.__version__}")
+            else:
+                check("torch mps", FAIL,
+                      "torch present but no MPS device; the declared Mac "
+                      "calibration requires accelerator copy bandwidth and "
+                      "FP16 throughput")
+        elif torch.cuda.is_available():
             p = torch.cuda.get_device_properties(0)
             cap = f"{p.major}.{p.minor}"
             detail = (f"{p.name}, {p.total_memory / 1e9:.0f} GB, sm_{p.major}{p.minor}, "
@@ -87,6 +99,10 @@ def check_deps() -> None:
                   "fp32 matmul, which is not a device measurement. On the "
                   "discrete-GPU machine install: pip install torch "
                   "--index-url https://download.pytorch.org/whl/cu128")
+        elif apple_silicon:
+            check("torch mps", FAIL,
+                  "torch not installed — the declared Mac calibration requires "
+                  "MPS device-copy bandwidth and FP16 throughput")
         else:
             check("torch cuda", PASS, "not installed (not needed on Metal)")
 
@@ -106,16 +122,51 @@ def check_llama_bench(quick: bool) -> Path | None:
         out = subprocess.run([str(binary), "--list-devices"],
                              capture_output=True, text=True, timeout=180)
         blob = (out.stdout + out.stderr)
-        backends = []
-        for token, label in (("CUDA", "CUDA"), ("Metal", "Metal"),
-                             ("Vulkan", "Vulkan"), ("BLAS", "BLAS")):
-            if token in blob:
-                backends.append(label)
+        if out.returncode != 0:
+            tail = blob.strip().splitlines()
+            check("llama-bench backend", FAIL,
+                  f"--list-devices exited {out.returncode}" +
+                  ((": " + " | ".join(tail[-2:])[:260]) if tail else ""))
+            return binary
+        # Only trust devices in llama.cpp's inventory. Initialisation logs can
+        # mention CUDA/Metal while reporting that the backend failed, which is
+        # not evidence that an accelerator is usable.
+        listed = []
+        in_inventory = False
+        for line in blob.splitlines():
+            stripped = line.strip()
+            if stripped.casefold() == "available devices:":
+                in_inventory = True
+                continue
+            if not in_inventory or ":" not in stripped:
+                continue
+            device_id = stripped.split(":", 1)[0].upper()
+            if device_id.startswith("CUDA"):
+                listed.append("CUDA")
+            elif device_id.startswith(("MTL", "METAL")):
+                listed.append("Metal")
+            elif device_id.startswith("VULKAN"):
+                listed.append("Vulkan")
+            elif device_id == "BLAS":
+                listed.append("BLAS")
+        backends = [name for name in ("CUDA", "Metal", "Vulkan", "BLAS")
+                    if name in listed]
         gpu = [l.strip() for l in blob.splitlines()
                if "GPU name" in l or l.strip().startswith("Device ")]
-        if not backends:
-            check("llama-bench backend", WARN,
-                  "no GPU backend detected — CPU-only inference will be very slow")
+        expected = None
+        if platform.system() == "Darwin" and platform.machine() == "arm64":
+            expected = "Metal"
+        elif platform.system() == "Windows":
+            expected = "CUDA"
+
+        if expected and expected not in backends:
+            found = ", ".join(backends) if backends else "none"
+            check("llama-bench backend", FAIL,
+                  f"expected {expected} on {platform.system()} "
+                  f"{platform.machine()}, found {found}")
+        elif not backends:
+            check("llama-bench backend", FAIL,
+                  "no accelerator backend detected")
         elif backends == ["BLAS"]:
             check("llama-bench backend", FAIL,
                   "BLAS only, no GPU backend. On Windows make sure you took a "
@@ -124,9 +175,9 @@ def check_llama_bench(quick: bool) -> Path | None:
             check("llama-bench backend", PASS,
                   ", ".join(backends) + (f" | {gpu[0]}" if gpu else ""))
     except subprocess.TimeoutExpired:
-        check("llama-bench backend", WARN, "--list-devices timed out")
+        check("llama-bench backend", FAIL, "--list-devices timed out")
     except Exception as e:
-        check("llama-bench backend", WARN, f"{type(e).__name__}: {e}")
+        check("llama-bench backend", FAIL, f"{type(e).__name__}: {e}")
     return binary
 
 
@@ -174,23 +225,69 @@ def check_load_average() -> None:
         check("system load", FAIL, f"{type(e).__name__}: {e}")
 
 
+def _declared_model_sizes() -> dict[str, int]:
+    """Return the frozen campaign filenames and exact byte sizes."""
+    path = RESULTS_DIR / "model_manifest.json"
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise ValueError(f"cannot read frozen model manifest {path}: {e}") from e
+    if not isinstance(document, dict) or not document:
+        raise ValueError(f"frozen model manifest {path} must be a non-empty object")
+
+    sizes = {}
+    for name, entry in document.items():
+        if (not isinstance(name, str) or not name or Path(name).name != name
+                or not isinstance(entry, dict)):
+            raise ValueError(f"invalid model entry {name!r} in {path}")
+        size = entry.get("size_bytes")
+        if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+            raise ValueError(f"invalid size_bytes for {name!r} in {path}: {size!r}")
+        sizes[name] = size
+    return sizes
+
+
+def _model_download_progress(sizes: dict[str, int]) -> tuple[int, int]:
+    """Return (verified final bytes, resumable partial bytes)."""
+    complete = partial = 0
+    for name, expected in sizes.items():
+        final = MODELS_DIR / name
+        if final.is_file() and final.stat().st_size == expected:
+            complete += expected
+            continue
+        part = final.with_suffix(final.suffix + ".part")
+        if part.is_file():
+            have = part.stat().st_size
+            # fetch.py resumes a short/equal partial, but discards an oversized
+            # one. Only bytes that can actually contribute count as progress.
+            if 0 <= have <= expected:
+                partial += have
+    return complete, partial
+
+
 def check_disk() -> None:
     try:
-        usage = shutil.disk_usage(ROOT)
-        free_gb = usage.free / 1e9
-        have = sum(p.stat().st_size for p in MODELS_DIR.glob("*.gguf")) / 1e9 \
-            if MODELS_DIR.is_dir() else 0
-        detail = f"{free_gb:.0f} GB free, {have:.0f} GB of models present"
-        # The full model set is ~324 GB.
-        if free_gb < 50:
-            check("disk", FAIL, detail + " — the full model set needs ~324 GB")
-        elif free_gb < 330 - have:
-            check("disk", WARN, detail +
-                  " — not enough for the full set; use --max-file-gb to subset")
+        sizes = _declared_model_sizes()
+        # Models may be redirected to another volume. Check the filesystem that
+        # will actually hold them, falling back to its existing parent before
+        # the directory has been created.
+        disk_path = MODELS_DIR
+        while not disk_path.exists() and disk_path != disk_path.parent:
+            disk_path = disk_path.parent
+        usage = shutil.disk_usage(disk_path)
+        complete, partial = _model_download_progress(sizes)
+        total = sum(sizes.values())
+        remaining = total - complete - partial
+        detail = (f"{usage.free / 1e9:.1f} GB free; declared cohort "
+                  f"{total / 1e9:.3f} GB, {complete / 1e9:.3f} GB complete, "
+                  f"{partial / 1e9:.3f} GB resumable, "
+                  f"{remaining / 1e9:.3f} GB remaining")
+        if usage.free < remaining:
+            check("disk", FAIL, detail + " — insufficient free space")
         else:
             check("disk", PASS, detail)
     except Exception as e:
-        check("disk", WARN, f"{type(e).__name__}: {e}")
+        check("disk", FAIL, f"{type(e).__name__}: {e}")
 
 
 def check_network() -> None:
@@ -212,19 +309,52 @@ def check_network() -> None:
 
 
 def check_models() -> None:
-    models = discover_models()
-    if not models:
-        check("models", WARN,
-              f"no GGUF in {MODELS_DIR} — run: python -m llmperf.fetch --set pilot")
-        return
-    from .common import read_gguf_meta
     try:
-        m = read_gguf_meta(min(models, key=lambda p: p.stat().st_size))
+        sizes = _declared_model_sizes()
+        missing = []
+        wrong = []
+        complete = []
+        for name, expected in sizes.items():
+            path = MODELS_DIR / name
+            if not path.is_file():
+                missing.append(name)
+                continue
+            actual = path.stat().st_size
+            if actual != expected:
+                wrong.append(f"{name} ({actual} != {expected} bytes)")
+            else:
+                complete.append(path)
+
+        partials = sorted(
+            p.relative_to(MODELS_DIR).as_posix()
+            for p in MODELS_DIR.rglob("*.gguf.part")
+        ) if MODELS_DIR.is_dir() else []
+        unexpected = sorted(
+            p.relative_to(MODELS_DIR).as_posix()
+            for p in discover_models(MODELS_DIR)
+            if p.parent != MODELS_DIR or p.name not in sizes
+        )
+        if missing or wrong or partials or unexpected:
+            details = [f"{len(complete)}/{len(sizes)} declared GGUF files complete"]
+            if missing:
+                details.append("missing: " + ", ".join(sorted(missing)))
+            if wrong:
+                details.append("wrong size: " + ", ".join(sorted(wrong)))
+            if partials:
+                details.append("partial downloads: " + ", ".join(partials))
+            if unexpected:
+                details.append("undeclared GGUF files: " + ", ".join(unexpected))
+            check("models", FAIL, "; ".join(details))
+            return
+
+        from .common import read_gguf_meta
+        smallest = min(complete, key=lambda p: p.stat().st_size)
+        m = read_gguf_meta(smallest)
         check("models", PASS,
-              f"{len(models)} on disk; metadata parses "
-              f"({m.name}: {m.n_params / 1e9:.1f}B, {m.n_layers} layers)")
+              f"all {len(complete)} declared files have exact sizes; metadata "
+              f"parses ({m.name}: {m.n_params / 1e9:.1f}B, {m.n_layers} layers)")
     except Exception as e:
-        check("models", FAIL, f"GGUF metadata unreadable: {type(e).__name__}: {e}")
+        check("models", FAIL, f"{type(e).__name__}: {e}")
 
 
 def check_live_run(binary: Path | None) -> None:

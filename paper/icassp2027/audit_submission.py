@@ -11,12 +11,14 @@ operate on the packaged PDFs, their build products, and the LaTeX source.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import sys
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pymupdf
 
 
@@ -25,6 +27,38 @@ PAPER = ROOT / "paper" / "icassp2027"
 MAIN_PDF = PAPER / "gguf-throughput-icassp2027.pdf"
 SUPPLEMENT_PDF = PAPER / "gguf-throughput-supplement.pdf"
 MAIN_TEX = PAPER / "main.tex"
+SUPPLEMENT_TEX = PAPER / "supplement.tex"
+STUDIO_INPUTS = (
+    ROOT / "results" / "measurements_mac-studio-m4-max.csv",
+    ROOT / "results" / "calibration_mac-studio-m4-max.json",
+    ROOT / "results" / "env_mac-studio-m4-max.json",
+)
+STUDIO_PROVENANCE_INPUTS = {
+    "system profile": ROOT / "results" / "system_profile_mac-studio-m4-max.txt",
+    "operating system": ROOT / "results" / "os_mac-studio-m4-max.txt",
+    "source commit": ROOT / "results" / "source_commit_mac-studio-m4-max.txt",
+    "measurement-source SHA-256": (
+        ROOT / "results" / "measurement_source_tree_mac-studio-m4-max.sha256"
+    ),
+    "llama.cpp package": ROOT / "results" / "llama_cpp_package_mac-studio-m4-max.txt",
+    "llama-bench SHA-256": ROOT / "results" / "llama_bench_mac-studio-m4-max.sha256",
+    "model sources": ROOT / "results" / "model_sources_mac-studio-m4-max.json",
+    "model integrity": ROOT / "results" / "model_integrity_mac-studio-m4-max.json",
+    "Python packages": ROOT / "results" / "python_packages_mac-studio-m4-max.txt",
+    "Tectonic package": ROOT / "results" / "tectonic_package_mac-studio-m4-max.txt",
+    "Tectonic SHA-256": ROOT / "results" / "tectonic_mac-studio-m4-max.sha256",
+}
+
+STALE_THREE_HOST_PATTERNS = (
+    ("two-system title", r"ACROSS\s+TWO\s+SYSTEMS"),
+    ("two-host appendix subtitle", r"protocol-complete\s+two-host\s+evidence"),
+    ("two-host cohort", r"\bacross\s+two\s+hosts\b"),
+    ("planned Studio has no rows", r"planned\s+Mac\s+Studio\s+has\s+no\s+rows"),
+    ("two-system transfer limit", r"uses\s+only\s+two\s+systems"),
+    ("two-stack comparison", r"across\s+the\s+two\s+host/runtime\s+stacks"),
+    ("missing model revisions", r"model\s+revisions\s+and\s+full\s+hashes\s+were\s+not\s+frozen"),
+    ("missing immutable model IDs", r"not\s+immutable\s+repository\s+revisions\s+or\s+full-file\s+hashes"),
+)
 
 failures: list[str] = []
 blockers: list[str] = []
@@ -100,6 +134,187 @@ def printed_bounds(page: pymupdf.Page) -> tuple[float, float, float, float]:
     )
 
 
+def three_host_content_errors(documents: dict[str, str]) -> list[str]:
+    """Find stale two-host prose or missing Studio coverage in sources/PDFs."""
+    errors: list[str] = []
+    for document_name, text in documents.items():
+        for label, pattern in STALE_THREE_HOST_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                errors.append(f"{label} in {document_name}")
+
+    for document_name in ("main source", "main PDF"):
+        text = documents.get(document_name, "")
+        if not re.search(r"ACROSS\s+THREE\s+SYSTEMS", text, re.IGNORECASE):
+            errors.append(f"three-system title missing from {document_name}")
+        if "Mac Studio M4 Max" not in text:
+            errors.append(f"Studio missing from {document_name}")
+    for document_name in ("supplement source", "supplement PDF"):
+        if "Mac Studio M4 Max" not in documents.get(document_name, ""):
+            errors.append(f"Studio missing from {document_name}")
+    return errors
+
+
+def _pdf_text(path: Path) -> str:
+    with pymupdf.open(path) as document:
+        return "\n".join(page.get_text() for page in document)
+
+
+def audit_three_host_freshness(main_source: str) -> None:
+    """Activate three-host content checks only after a complete Studio campaign."""
+    missing = [path.name for path in STUDIO_INPUTS if not path.is_file()]
+    if missing:
+        print(
+            "[SKIP ] three-host manuscript freshness: waiting for "
+            + ", ".join(missing)
+        )
+        return
+
+    try:
+        sys.path.insert(0, str(ROOT))
+        from llmperf.analyze import load_measurements, select_primary_measurements
+        from paper.icassp2027.generate_supplement import (
+            binary_provenance_errors,
+            campaign_validation_errors,
+            measurement_source_provenance_errors,
+            model_integrity_provenance_errors,
+            model_source_provenance_errors,
+        )
+
+        results = ROOT / "results"
+        raw = pd.read_csv(STUDIO_INPUTS[0])
+        calibration = json.loads(STUDIO_INPUTS[1].read_text(encoding="utf-8"))
+        environment = json.loads(STUDIO_INPUTS[2].read_text(encoding="utf-8"))
+        manifest = json.loads(
+            (results / "model_manifest.json").read_text(encoding="utf-8")
+        )
+        selected = select_primary_measurements(load_measurements(results))
+        campaign_errors = campaign_validation_errors(
+            selected,
+            raw,
+            manifest,
+            environment,
+            "mac-studio-m4-max",
+            require_manifest_coverage=True,
+        )
+        for field in ("host", "platform", "git_commit", "cpu"):
+            if calibration.get(field) != environment.get(field):
+                campaign_errors.append(
+                    f"calibration/environment {field} mismatch: "
+                    f"{calibration.get(field)!r} vs {environment.get(field)!r}"
+                )
+        missing_provenance = [
+            label
+            for label, path in STUDIO_PROVENANCE_INPUTS.items()
+            if not path.is_file() or path.stat().st_size == 0
+        ]
+        if missing_provenance:
+            campaign_errors.append(
+                "missing or empty Studio provenance: "
+                + ", ".join(missing_provenance)
+            )
+        else:
+            model_sources = json.loads(
+                STUDIO_PROVENANCE_INPUTS["model sources"].read_text(
+                    encoding="utf-8"
+                )
+            )
+            model_integrity = json.loads(
+                STUDIO_PROVENANCE_INPUTS["model integrity"].read_text(
+                    encoding="utf-8"
+                )
+            )
+            manifest_digest = sha256(results / "model_manifest.json")
+            campaign_errors.extend(
+                model_source_provenance_errors(
+                    model_sources,
+                    manifest,
+                    manifest_digest,
+                )
+            )
+            campaign_errors.extend(
+                model_integrity_provenance_errors(
+                    model_integrity,
+                    manifest,
+                    model_sources,
+                    manifest_digest,
+                    "mac-studio-m4-max",
+                )
+            )
+            campaign_errors.extend(
+                measurement_source_provenance_errors(
+                    STUDIO_PROVENANCE_INPUTS[
+                        "measurement-source SHA-256"
+                    ].read_text(encoding="utf-8"),
+                    ROOT,
+                )
+            )
+            campaign_errors.extend(
+                binary_provenance_errors(
+                    STUDIO_PROVENANCE_INPUTS["llama.cpp package"].read_text(
+                        encoding="utf-8"
+                    ),
+                    STUDIO_PROVENANCE_INPUTS["llama-bench SHA-256"].read_text(
+                        encoding="utf-8"
+                    ),
+                    "runner_sha256",
+                    "llama-bench",
+                )
+            )
+            campaign_errors.extend(
+                binary_provenance_errors(
+                    STUDIO_PROVENANCE_INPUTS["Tectonic package"].read_text(
+                        encoding="utf-8"
+                    ),
+                    STUDIO_PROVENANCE_INPUTS["Tectonic SHA-256"].read_text(
+                        encoding="utf-8"
+                    ),
+                    "binary_sha256",
+                    "Tectonic",
+                )
+            )
+    except Exception as exc:
+        campaign_errors = [f"could not validate Studio campaign: {exc}"]
+
+    report(
+        "Studio campaign completeness",
+        not campaign_errors,
+        (
+            "all manifest models have a six-row grid or an explicit failure"
+            if not campaign_errors
+            else "; ".join(campaign_errors)
+        ),
+    )
+    if campaign_errors:
+        print(
+            "[SKIP ] three-host manuscript freshness: Studio campaign is not complete"
+        )
+        return
+
+    supplement_source = (
+        SUPPLEMENT_TEX.read_text(encoding="utf-8")
+        if SUPPLEMENT_TEX.is_file()
+        else ""
+    )
+    documents = {
+        "main source": main_source,
+        "supplement source": supplement_source,
+        "main PDF": _pdf_text(MAIN_PDF) if MAIN_PDF.is_file() else "",
+        "supplement PDF": (
+            _pdf_text(SUPPLEMENT_PDF) if SUPPLEMENT_PDF.is_file() else ""
+        ),
+    }
+    issues = three_host_content_errors(documents)
+    report(
+        "three-host manuscript freshness",
+        not issues,
+        (
+            "main and supplement identify the completed three-host cohort"
+            if not issues
+            else "stale or missing content: " + ", ".join(issues)
+        ),
+    )
+
+
 def main() -> int:
     source = MAIN_TEX.read_text(encoding="utf-8")
     abstract_match = re.search(
@@ -118,6 +333,7 @@ def main() -> int:
            "no ragged-right override is present")
     report("page numbering", not re.search(r"\\(?:page|pagenumbering)\b", source),
            "source does not add page numbers")
+    audit_three_host_freshness(source)
 
     placeholder_tokens = ("Author Name", "Affiliation", "author@example.com")
     placeholders = [token for token in placeholder_tokens if token in source]

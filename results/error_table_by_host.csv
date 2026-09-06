@@ -5,6 +5,12 @@ lun-mac,"B1 fitted, total params",train,45,15.8,3.2,70.29,76.77
 lun-mac,"B1 fitted, total params",test,12,49.36,54.66,81.9,82.74
 lun-mac,"B2 fitted, active params (ours)",train,45,10.39,2.12,26.32,78.49
 lun-mac,"B2 fitted, active params (ours)",test,12,13.11,8.98,36.65,49.92
+mac-studio-m4-max,"B0 unfitted (eta=1, total)",train,45,32.95,19.4,75.52,125.41
+mac-studio-m4-max,"B0 unfitted (eta=1, total)",test,15,57.98,81.6,92.02,92.67
+mac-studio-m4-max,"B1 fitted, total params",train,45,17.76,7.49,68.32,75.84
+mac-studio-m4-max,"B1 fitted, total params",test,15,55.25,72.08,80.95,81.72
+mac-studio-m4-max,"B2 fitted, active params (ours)",train,45,12.4,7.49,29.09,78.32
+mac-studio-m4-max,"B2 fitted, active params (ours)",test,15,14.37,11.3,33.89,52.62
 rtx5080,"B0 unfitted (eta=1, total)",train,36,20.27,14.47,44.15,71.19
 rtx5080,"B0 unfitted (eta=1, total)",test,6,41.65,40.39,81.22,81.95
 rtx5080,"B1 fitted, total params",train,36,9.85,8.88,20.95,31.73

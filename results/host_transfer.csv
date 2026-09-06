@@ -1,7 +1,10 @@
-variant,held_out_host,n_train,n_held,MAPE_%,median_APE_%,max_APE_%
-B2 median-ratio (all target),lun-mac,36,57,20.8201,15.4096,75.814
-B2 median-ratio (all target),rtx5080,45,42,21.6916,18.7468,71.5281
-B2 median-ratio (target test),lun-mac,36,12,13.9367,8.6303,47.6725
-B2 median-ratio (target test),rtx5080,45,6,36.6978,26.1832,71.5281
-two-term absolute-time,lun-mac,36,57,57.0593,54.224,78.5693
-two-term absolute-time,rtx5080,45,42,116.8478,98.6576,349.2502
+variant,held_out_host,source_hosts,n_source_hosts,n_train,n_held,MAPE_%,median_APE_%,max_APE_%
+B2 median-ratio (all target),lun-mac,"[""mac-studio-m4-max"",""rtx5080""]",2.0,81,57,14.4668,8.0235,73.6109
+B2 median-ratio (all target),mac-studio-m4-max,"[""lun-mac"",""rtx5080""]",2.0,81,60,15.4234,10.7767,84.2963
+B2 median-ratio (all target),rtx5080,"[""lun-mac"",""mac-studio-m4-max""]",2.0,90,42,20.7972,18.1786,68.1257
+B2 median-ratio (target test),lun-mac,"[""mac-studio-m4-max"",""rtx5080""]",2.0,81,12,11.5947,6.0016,45.822
+B2 median-ratio (target test),mac-studio-m4-max,"[""lun-mac"",""rtx5080""]",2.0,81,15,16.7618,14.3566,57.737
+B2 median-ratio (target test),rtx5080,"[""lun-mac"",""mac-studio-m4-max""]",2.0,90,6,35.9699,25.6639,68.1257
+two-term absolute-time,lun-mac,,,81,57,17.8777,12.096,75.6633
+two-term absolute-time,mac-studio-m4-max,,,81,60,16.9319,9.5027,66.0585
+two-term absolute-time,rtx5080,,,90,42,149.3313,132.3821,501.5729

@@ -1,211 +1,216 @@
-# Restart checkpoint — 2026-09-04
+# Restart checkpoint — 2026-09-05
 
-This is the completed two-host checkpoint for the ICASSP 2027 paper. Model
-acquisition is finished; there is no partial download or measurement sweep to
-resume.
+## Current state
 
-## Local state
+The three declared measurement campaigns are complete. Do not resume model
+fetching or the Mac Studio sweep unless a later integrity check finds damage.
+The generated three-host analysis tables, diagnostic figures, publication
+figures, manuscript, supplement, and packaged PDFs are current. Every
+machine-verifiable submission check passes; verified author identity is the
+only remaining blocker.
 
-- Repository: `C:\Users\lun\Papers\gguf-perf`
-- Git parent commit for this Mac Studio handoff:
-  `d1b707c2ed4d0b483b0edc6221f1894676e8149e`
-- CUDA runner:
-  `C:\Users\lun\AppData\Local\gguf-perf\llama-b10794\llama-bench.exe`
-- Tectonic:
-  `C:\Users\lun\AppData\Local\gguf-perf\tectonic-0.17.0\tectonic.exe`
-- GPU: NVIDIA GeForce RTX 5080, compute capability 12.0, driver 572.70,
-  16,302 MiB reported by `llama-bench`
-- CPU/RAM: AMD Threadripper PRO 7975WX, 32 cores/64 threads, 127.4 GiB RAM
-- RTX calibration: CUDA copy bandwidth 801.06 GB/s and FP16 throughput
-  118.83 TFLOP/s with PyTorch 2.11.0+cu128
-- Mac calibration: 380.05 GB/s device copy, 377.24 GB/s selected LLM reference,
-  and 13.95 TFLOP/s FP16 matrix throughput
+Repository: `/Users/lun/Projects/O1A/gguf-perf`
 
-The local `models/` directory contains 14 complete GGUF files totaling
-100,662,965,376 bytes (about 100.7 GB). No `.part` file remains. Do not start a
-new fetch merely to continue the paper.
+```bash
+export LLMPERF_HOST=mac-studio-m4-max
+export LLAMA_BENCH=/Users/lun/.local/share/gguf-perf/llama-b10794/llama-bench
+export SSL_CERT_FILE=/etc/ssl/cert.pem
+```
 
-The working tree intentionally contains the paper, frozen manifests, figures,
-tests, RTX results, and submission requirements. No cleanup or reset should be
-performed just because these paths are modified or untracked.
+The native `.venv` uses Python 3.12.14 and PyTorch 2.14.0 with working MPS.
+The pinned Tectonic binary and offline cache are:
 
-## Completed data
+```text
+/Users/lun/.local/share/gguf-perf/tectonic-0.17.0/tectonic
+/Users/lun/.local/share/gguf-perf/tectonic-cache
+```
 
-- `results/measurements_lun-mac.csv`: 132 selected successful rows from the
-  64-GB MacBook Pro M4 Max across 22
-  measured files; 19 scored configurations after three calibration probes are
-  excluded.
-- `results/measurements_rtx5080.csv`: 84 selected successful rows from 14
-  scored files; 12 training and two held-out configurations.
-- Combined selected cohort: 216 successful rows (132 Mac and 84 RTX).
-- Combined scored cohort: 99 decode and 99 prefill rows across 33 host--file
-  configurations and 21 unique GGUF files.
-- Every selected RTX cell uses CUDA, requested `n_gpu_layers=99`, five
-  repetitions, 45-second settling, and depths 0/4096/16384.
-- No partial-offload sweep was run. Requested layer offload does not prove
-  physical VRAM residency; no residency/spill telemetry exists.
+The current unit suite passes 96/96 tests. The last full doctor check reported
+14 pass, 0 warnings, and 0 failures, including a live Metal decode.
 
-RTX decode gating succeeded: the maximum selected within-cell CV is 1.652%.
-Prefill was not gated, and 29 of 42 RTX prefill rows exceed 3% CV. Preserve
-those rows as part of the reported negative result.
+## Completed Mac Studio campaign
 
-## Checked results
+The host is a Mac Studio Mac16,9 with an M4 Max, 12 performance plus four
+efficiency CPU cores, 40 GPU cores, 128 GB unified memory, and macOS 26.6.2.
+Calibration recorded 396.73 GB/s MPS device-copy bandwidth and 15.00 TFLOP/s
+FP16 matrix throughput. The official arm64 llama.cpp b10794 runner is pinned to
+the same release label as the RTX runner.
+
+All 23 declared GGUFs, totaling 336,367,242,336 bytes, are present. There are
+no extra GGUFs or `.part` files. The Studio completed all six declared cells
+for every file, including gpt-oss-120B, with no terminal failures:
+
+- 138 selected rows from 23 files;
+- 69 decode and 69 prefill observations;
+- 18 observations from three Q8 calibration probes excluded from fitting and
+  scoring;
+- 20 scored configurations, split 15 train and five test;
+- 60 scored rows per phase.
+
+The fetch history is no longer operationally relevant, but the frozen
+pre-fetch manifest remains at
+`/Users/lun/.local/share/gguf-perf/provenance/model_manifest.prefetch.json`
+with SHA-256
+`2a672d622a30fd2107a01735744de9ba24e97025c3b9b973b5df442b2b662ec6`.
+
+`results/model_integrity_mac-studio-m4-max.json` records a passing verification
+of all 23 exact sizes and LFS SHA-256 values, uncached header parsing, and scalar
+plus per-depth KV metadata agreement with `results/model_metadata.json`.
+
+## Final cohort
+
+| | MacBook (`lun-mac`) | Studio (`mac-studio-m4-max`) | RTX (`rtx5080`) | Total |
+|---|---:|---:|---:|---:|
+| selected successful files | 22 | 23 | 14 | 59 host--file configurations |
+| selected rows | 132 | 138 | 84 | **354** |
+| excluded probe configurations | 3 | 3 | 0 | 6 |
+| scored configurations | 19 | 20 | 14 | **53** |
+| scored train / test configurations | 15 / 4 | 15 / 5 | 12 / 2 | 42 / 11 |
+| scored decode rows | 57 | 60 | 42 | **159** |
+| scored prefill rows | 57 | 60 | 42 | **159** |
+
+The scored configurations represent 22 unique GGUF files. Every selected row
+uses flash attention, F16 K/V, five repetitions, 45-second settling, requested
+`n_gpu_layers=99`, and depths 0/4096/16384. No lower-`ngl` campaign exists.
+
+The MacBook raw CSV retains legacy observations and two explicit records for
+the gpt-oss-120B prompt-batch failure. The atomic selector keeps complete
+protocol rows first and never splices fields between attempts. The failure was
+not proven to be an out-of-memory event.
+
+## Checked prediction results
 
 | Host | B2 decode train/test MAPE | P2 prefill train/test MAPE |
 |---|---:|---:|
 | MacBook M4 Max | 10.39% / 13.11% | 4.13% / 18.68% |
+| Mac Studio M4 Max | 12.40% / 14.37% | 4.27% / 22.23% |
 | RTX 5080 | 10.12% / 36.15% | 5.86% / 108.18% |
 
-B2 median-ratio leave-one-host-out MAPE over all target rows is 20.82% on Mac
-and 21.69% on RTX; median APE is 15.41%/18.75% and maximum APE is
-75.81%/71.53%, versus target-fitted all-row MAPE of 10.96%/13.84%. On target
-test rows only, transfer gives 13.94%/36.70% MAPE (median 8.63%/26.18%), close
-to target-fitted 13.11%/36.15%. This narrow,
-all-Q4 result does not show target adaptation is necessary, but neither does it
-establish universal transfer. The rejected two-term output-projection model,
-not B2, has 57.1%/116.8% transfer MAPE. Prefill prediction still fails on RTX.
+B2 leave-one-host-out transfer, with coefficients learned from the remaining
+host pair, gives:
 
-The generated `results/host_transfer.csv` records the all-target B2,
-target-test B2, and rejected two-term absolute-time variants.
+| Target | All-target MAPE / median / max | Test MAPE / median / max |
+|---|---:|---:|
+| MacBook | 14.47% / 8.02% / 73.61% | 11.59% / 6.00% / 45.82% |
+| Mac Studio | 15.42% / 10.78% / 84.30% | 16.76% / 14.36% / 57.74% |
+| RTX 5080 | 20.80% / 18.18% / 68.13% | 35.97% / 25.66% / 68.13% |
+
+Target-fitted all-row B2 MAPE is 10.96%, 12.89%, and 13.84%; target-fitted
+test MAPE is 13.11%, 14.37%, and 36.15%. The held-out cohort is still narrow,
+spanning MXFP4, Q4_K, and Q4_K_M, so transfer is not evidence for a universal
+coefficient.
+
+The rejected two-term absolute-time extension has all-target transfer MAPE of
+17.88%, 16.93%, and 149.33% on MacBook, Studio, and RTX. Do not confuse those
+values with B2.
+
+At 16,384 tokens of existing prefix, P2 held-out MAPE is 76.18%, 68.11%, and
+133.34%. The zero-prefix prefill equation has no context-dependent work term;
+these values are a scope diagnostic, and RTX prefill is already unsupported at
+depth zero.
+
+## Measurement quality
+
+| Host | Decode CV median/max; rows over 3% | Prefill CV median/max; rows over 3% |
+|---|---:|---:|
+| MacBook | 0.827% / 3.035%; 1/66 | 1.375% / 4.840%; 8/66 |
+| Mac Studio | 0.424% / 2.304%; 0/69 | 0.117% / 0.963%; 0/69 |
+| RTX 5080 | 0.433% / 1.652%; 0/42 | 3.558% / 39.192%; 29/42 |
+
+The retry gate applies to decode, not prefill. Preserve every selected prefill
+row rather than filtering it after observing residuals.
+
+## Provenance state
+
+- Studio system, OS, Python packages, official b10794 archive/binary, Tectonic
+  0.17.0 archive/binary, model repositories/revisions/LFS hashes, and local
+  model integrity all have persistent records under `results/`.
+- `results/measurement_source_tree_mac-studio-m4-max.sha256` covers the exact
+  direct `llmperf/*.py` inventory plus `requirements.txt` used for measurement.
+  Do not refresh it after source edits.
+- Repository `.git` metadata and Apple command-line tools are absent. The
+  source handoff records parent commit
+  `d1b707c2ed4d0b483b0edc6221f1894676e8149e`; retain the limitation.
+- Historical MacBook executable provenance remains incomplete. The RTX runner
+  directory is labelled b10794, but its version query did not independently
+  return a revision. Do not generalize runtime comparisons beyond those facts.
 
 ## Paper state
 
-- Title: `GGUF-METADATA PREDICTION OF SINGLE-SEQUENCE LLAMA.CPP THROUGHPUT ACROSS TWO SYSTEMS`
-- Source: `paper/icassp2027/main.tex`
-- Main PDF: `paper/icassp2027/gguf-throughput-icassp2027.pdf`
-- Supplement: `paper/icassp2027/gguf-throughput-supplement.pdf`
-- Main PDF: five pages; pages 1--4 are technical content and page 5 is
-  references only
-- Supplement: 16 pages
-- Final verification: 30 unit tests pass; the latest quick `llmperf.doctor`
-  reports 13 pass, 0 warn, 0 fail, and an earlier full run reported 14 pass,
-  including a live RTX decode. The submission audit passes every
-  machine-verifiable check and blocks only on author identity. Both PDFs are
-  unencrypted Letter documents with embedded fonts, and the LaTeX logs have no
-  undefined references, overfull boxes, or balance-package warnings.
-- Packaged PDF SHA-256 values:
-  `DC67DDFC94E2566186D0472990F9EE08E947A0C7FD4F43A7ABA209E8CF20D86D`
-  (main) and
-  `1429702520E9B2AE3351533C5D7F75D723F451D4F763D98F584B5E3198AFF96C`
-  (supplement).
+The final title is
+`GGUF-METADATA PREDICTION OF SINGLE-SEQUENCE LLAMA.CPP THROUGHPUT ACROSS THREE SYSTEMS`.
+The current three-host result CSVs, figures, `main.tex`, `supplement.tex`, and
+packaged PDFs are regenerated and audited.
 
-The only non-computational submission blocker is the placeholder author block
-(`Author Name`, `Affiliation`, `author@example.com`). ICASSP 2027 is non-blind;
-obtain the verified identity rather than inventing it.
+- `paper/icassp2027/gguf-throughput-icassp2027.pdf`: five pages, with technical
+  content on pages 1--4 and references only on page 5; SHA-256
+  `303d94f4612d73a68d164d4236b564b84d97338f172b444639681f32a821e64d`.
+- `paper/icassp2027/gguf-throughput-supplement.pdf`: 22 pages; SHA-256
+  `03341a1748383ce0e3e70054acf86519595f1c80ffb857cb3ab299c52728808f`.
+- Unit tests: 96/96 pass.
+- Submission audit: exit status 2 with every machine-verifiable check PASS and
+  `author identity` as the sole blocker.
 
-## Next campaign: 128-GB Mac Studio M4 Max
+The remaining external blocker is the placeholder author block:
 
-The Mac Studio is a planned third host and has **no rows in the frozen paper
-cohort yet**. The existing `lun-mac` rows are from the 64-GB MacBook Pro M4 Max.
-Do not append Studio measurements to `measurements_lun-mac.csv`.
-
-Use the stable host ID `mac-studio-m4-max`. On the Studio, clone or update the
-repository, install `llama.cpp`, and create a native macOS environment:
-
-```bash
-git pull --ff-only
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-
-export LLMPERF_HOST=mac-studio-m4-max
-export LLAMA_BENCH="$(command -v llama-bench)"
+```text
+Author Name
+Affiliation
+author@example.com
 ```
 
-Prefer transferring the exact GGUF files used on the MacBook. If they are not
-available, inspect and fetch the declared cohort before measuring:
-
-```bash
-python -m llmperf.fetch --set all --dry-run
-python -m llmperf.fetch --set all
-```
-
-Record hardware, OS, source, package, and runner identity before the sweep:
-
-```bash
-system_profiler SPHardwareDataType SPDisplaysDataType > results/system_profile_mac-studio-m4-max.txt
-sw_vers > results/os_mac-studio-m4-max.txt
-git rev-parse HEAD > results/source_commit_mac-studio-m4-max.txt
-brew list --versions llama.cpp > results/llama_cpp_package_mac-studio-m4-max.txt
-shasum -a 256 "$LLAMA_BENCH" > results/llama_bench_mac-studio-m4-max.sha256
-```
-
-Then run the same declared protocol as the completed hosts:
-
-```bash
-python -m llmperf.doctor
-python -m llmperf.calibrate
-python -m llmperf.sweep --dry-run --repetitions 5 --settle 45 --depths 0 4096 16384
-python -m llmperf.sweep --repetitions 5 --settle 45 --depths 0 4096 16384
-```
-
-Expected new files are `results/calibration_mac-studio-m4-max.json`,
-`results/env_mac-studio-m4-max.json`, and
-`results/measurements_mac-studio-m4-max.csv`, plus the five provenance files
-above. The sweep is append-only and resumes completed cells. Do not use
-`llmperf.campaign` for this run: it regenerates analysis and overwrites the
-curated `results/STATUS.md` before the three-host paper update is ready.
-
-After collection, return these files to the main workspace. The next analysis
-must keep all three hosts separate, recompute leave-one-host-out transfer, and
-revise the title, tables, figures, supplement, and claims before submission.
+ICASSP 2027 is non-blind. Obtain verified values; do not invent them.
 
 ## Continue after restart
 
-Open PowerShell:
+Do not run another fetch or sweep. Regenerate and validate derived artifacts
+only if their inputs or paper-side source changed:
 
-```powershell
-Set-Location 'C:\Users\lun\Papers\gguf-perf'
-$env:LLMPERF_HOST = 'rtx5080'
-$env:LLAMA_BENCH = 'C:\Users\lun\AppData\Local\gguf-perf\llama-b10794\llama-bench.exe'
+```bash
+cd /Users/lun/Projects/O1A/gguf-perf
+export LLMPERF_HOST=mac-studio-m4-max
+export LLAMA_BENCH=/Users/lun/.local/share/gguf-perf/llama-b10794/llama-bench
+export SSL_CERT_FILE=/etc/ssl/cert.pem
+
+.venv/bin/python -m llmperf.doctor --quick
+.venv/bin/python -m llmperf.analyze
+.venv/bin/python -m llmperf.refine
+.venv/bin/python paper/icassp2027/generate_main_figures.py
+.venv/bin/python paper/icassp2027/generate_supplement.py
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-`llama-bench` is also auto-discovered from this managed install path after a
-restart; the explicit variable pins the measured binary in the b10794-labeled
-directory, although its version query did not independently report a revision.
-These variables are only needed for hardware checks or new measurements.
-Analysis uses the saved per-host files.
+Build after the manuscript edit:
 
-Validate and regenerate analysis artifacts:
+```bash
+cd paper/icassp2027
+export TECTONIC_CACHE_DIR=/Users/lun/.local/share/gguf-perf/tectonic-cache
+TECTONIC_BIN=/Users/lun/.local/share/gguf-perf/tectonic-0.17.0/tectonic
 
-```powershell
-.\.venv\Scripts\python.exe -m llmperf.doctor --quick
-.\.venv\Scripts\python.exe -m llmperf.analyze
-.\.venv\Scripts\python.exe -m llmperf.refine
-.\.venv\Scripts\python.exe -m llmperf.figures
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe paper\icassp2027\audit_submission.py
-git diff --check
+mkdir -p build supplement-build
+"$TECTONIC_BIN" --only-cached --keep-logs --keep-intermediates \
+  --outdir build main.tex
+cp build/main.pdf gguf-throughput-icassp2027.pdf
+
+"$TECTONIC_BIN" --only-cached --keep-logs --keep-intermediates \
+  --outdir supplement-build supplement.tex
+cp supplement-build/supplement.pdf gguf-throughput-supplement.pdf
+
+cd ../..
+.venv/bin/python paper/icassp2027/audit_submission.py
 ```
 
-Rebuild the paper from `paper\icassp2027`:
-
-```powershell
-Set-Location 'C:\Users\lun\Papers\gguf-perf\paper\icassp2027'
-$tectonic = 'C:\Users\lun\AppData\Local\gguf-perf\tectonic-0.17.0\tectonic.exe'
-
-New-Item -ItemType Directory -Force build, supplement-build | Out-Null
-& $tectonic --keep-logs --keep-intermediates --outdir build main.tex
-Copy-Item build\main.pdf gguf-throughput-icassp2027.pdf
-..\..\.venv\Scripts\python.exe generate_supplement.py
-& $tectonic --keep-logs --keep-intermediates --outdir supplement-build supplement.tex
-Copy-Item supplement-build\supplement.pdf gguf-throughput-supplement.pdf
-```
-
-After inserting author details, repeat the build and page/font/reference audit.
-Do not restore an earlier Mac-only draft or acquisition checkpoint.
+Before author details are supplied, exit status 2 is acceptable only when
+`author identity` is the sole blocker and every machine-verifiable check passes.
 
 ## Guardrails
 
-- Do not pool hosts as the primary score; report each host's cohort.
-- Do not describe `n_gpu_layers=99` as proof of full physical residency.
+- Do not pool hosts as the primary score.
+- Do not describe requested `n_gpu_layers=99` as proof of physical residency.
 - Do not claim an offload cliff without lower-`ngl` measurements.
-- Do not attribute any row to the planned 128-GB Mac Studio; it has not yet
-  contributed measurements to the frozen cohort.
-- Do not filter prefill cells after observing their residuals.
-- Do not restore the invalid 10.9% Mac headline; the atomically selected value
-  is 13.11% held out.
-- The 63.39-GB gpt-oss-120B Mac run initialized but failed prompt-batch
-  execution (`res=-3`); it was not proven to be an out-of-memory failure.
-- Keep raw CSVs append-only and preserve the frozen manifest/metadata files.
+- Do not filter prefill cells after observing residuals.
+- Keep raw measurement CSVs append-only.
+- Preserve frozen manifests, metadata, model hashes, integrity report, binary
+  records, and measurement-source inventory.
+- Do not run `llmperf.campaign`; it overwrites curated `results/STATUS.md`.
+- Do not restore superseded Mac-only or earlier cohort numbers.

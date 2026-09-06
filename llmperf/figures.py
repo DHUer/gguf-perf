@@ -23,6 +23,7 @@ Palette is the validated categorical order (worst adjacent CVD dE 9.1, above the
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -35,7 +36,7 @@ from matplotlib.lines import Line2D
 
 from .analyze import (add_features, apply_eta, ape, fit_eta, load_calibration,
                        load_measurements, load_splits,
-                       select_primary_measurements)
+                       select_primary_measurements, validate_host_coverage)
 from .common import (FIGURES_DIR, MODELS_DIR, RESULTS_DIR,
                      load_model_metadata)
 
@@ -44,6 +45,27 @@ from .common import (FIGURES_DIR, MODELS_DIR, RESULTS_DIR,
 C = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]
 INK, INK2, MUTED = "#1a1a19", "#4a4a46", "#8a8a82"
 SURFACE = "#fcfcfb"
+
+# These assignments are identifiers, not positions in a sorted host list.
+# Adding the Studio must leave the two-host paper's MacBook/RTX colours intact,
+# while marker and line style keep all three distinguishable in greyscale.
+HOST_STYLES = {
+    "lun-mac": {
+        "label": "MacBook M4 Max", "short": "MB", "color": C[0],
+        "marker": "o", "linestyle": "-",
+    },
+    "rtx5080": {
+        "label": "RTX 5080", "short": "RTX", "color": C[1],
+        "marker": "s", "linestyle": "--",
+    },
+    "mac-studio-m4-max": {
+        "label": "Mac Studio M4 Max", "short": "MS", "color": C[2],
+        "marker": "D", "linestyle": "-.",
+    },
+}
+HOST_ORDER = ("lun-mac", "mac-studio-m4-max", "rtx5080")
+_UNKNOWN_HOST_MARKERS = ("^", "v", "P", "X", "*")
+_UNKNOWN_HOST_LINES = (":", (0, (3, 1, 1, 1)), (0, (5, 2)))
 
 # Single- and double-column widths in inches.
 COL, WIDE = 3.4, 7.0
@@ -71,6 +93,27 @@ plt.rcParams.update({
 })
 
 
+def host_style(host: str) -> dict:
+    """Stable, print-safe styling for known and future host IDs."""
+    host = str(host)
+    if host in HOST_STYLES:
+        return HOST_STYLES[host]
+    digest = hashlib.sha256(host.encode("utf-8")).digest()
+    return {
+        "label": host,
+        "short": host,
+        "color": C[3 + digest[0] % (len(C) - 3)],
+        "marker": _UNKNOWN_HOST_MARKERS[digest[1] % len(_UNKNOWN_HOST_MARKERS)],
+        "linestyle": _UNKNOWN_HOST_LINES[digest[2] % len(_UNKNOWN_HOST_LINES)],
+    }
+
+
+def ordered_hosts(values) -> list[str]:
+    present = {str(value) for value in values}
+    known = [host for host in HOST_ORDER if host in present]
+    return known + sorted(present - set(known))
+
+
 def save(fig, out: Path, name: str) -> str:
     out.mkdir(parents=True, exist_ok=True)
     for ext in ("pdf", "png"):
@@ -84,6 +127,7 @@ def _load():
     cal = load_calibration(RESULTS_DIR)
     if not cal:
         raise SystemExit("no calibration_*.json; run `python -m llmperf.calibrate`")
+    validate_host_coverage(df, cal)
     # Publication figures must be reproducible from the archived result bundle;
     # an unrelated GGUF currently installed in models/ must not change them.
     df = add_features(df, cal, load_splits(MODELS_DIR),
@@ -105,13 +149,10 @@ def fig_accuracy(dec, pred, out: Path) -> str:
     """
     lo = float(min(dec["avg_ts"].min(), np.nanmin(pred))) * 0.65
     hi = float(max(dec["avg_ts"].max(), np.nanmax(pred))) * 1.5
-    hosts = sorted(dec["host"].unique())
+    hosts = ordered_hosts(dec["host"].unique())
     fig, axes = plt.subplots(1, len(hosts), figsize=(WIDE, 3.35),
                              sharex=True, sharey=True, squeeze=False)
     axes = axes.ravel()
-    host_names = {"lun-mac": "MacBook M4 Max",
-                  "mac-studio-m4-max": "Mac Studio M4 Max",
-                  "rtx5080": "RTX 5080"}
     groups = [
         ("train, dense", False, "train", "o", C[0], True),
         ("train, MoE", True, "train", "s", C[0], False),
@@ -140,7 +181,7 @@ def fig_accuracy(dec, pred, out: Path) -> str:
                     color=MUTED, lw=0.6, zorder=1)
         ax.set(xscale="log", yscale="log", xlim=(lo, hi), ylim=(lo, hi))
         ax.set_aspect("equal")
-        ax.set_title(host_names.get(host, host), fontsize=9, fontweight="bold")
+        ax.set_title(host_style(host)["label"], fontsize=9, fontweight="bold")
         ax.set_xlabel("measured decode (tok/s)")
     axes[0].set_ylabel("predicted decode (tok/s)")
     axes[-1].text(hi * 0.97, hi * 0.8 * 0.97, "±25%", color=MUTED,
@@ -153,6 +194,27 @@ def fig_accuracy(dec, pred, out: Path) -> str:
     return save(fig, out, "fig1_accuracy")
 
 
+def ablation_error_rows(dec: pd.DataFrame, preds: dict) -> pd.DataFrame:
+    """Summarize ablation error without ever averaging across hosts."""
+    measured = dec["avg_ts"].to_numpy()
+    rows = []
+    for host in ordered_hosts(dec["host"].dropna().unique()):
+        for split in ("train", "test"):
+            for is_moe, architecture in ((False, "dense"), (True, "MoE")):
+                mask = ((dec["host"] == host) & (dec["split"] == split) &
+                        (dec["is_moe"] == is_moe)).to_numpy()
+                if not mask.any():
+                    continue
+                for model, pred in preds.items():
+                    values = ape(np.asarray(pred)[mask], measured[mask])
+                    rows.append({
+                        "host": host, "split": split,
+                        "architecture": architecture, "model": model,
+                        "n": int(mask.sum()), "MAPE_%": float(values.mean()),
+                    })
+    return pd.DataFrame(rows)
+
+
 def fig_ablation(dec, preds, out: Path) -> str:
     """The paper's central claim. Job: compare magnitudes across few categories.
 
@@ -161,39 +223,56 @@ def fig_ablation(dec, preds, out: Path) -> str:
     palette validator flags these hues for relief on a light surface, and direct
     labels are how that obligation is met.
     """
-    cells, labels = [], []
-    for split in ("train", "test"):
-        for is_moe, tag in ((False, "dense"), (True, "MoE")):
-            m = ((dec["split"] == split) & (dec["is_moe"] == is_moe)).to_numpy()
-            if m.any():
-                cells.append(m)
-                labels.append(f"{split}\n{tag}\n(n={m.sum()})")
-    if not cells:
+    summary = ablation_error_rows(dec, preds)
+    if summary.empty:
         return ""
 
     names = list(preds)
-    fig, ax = plt.subplots(figsize=(WIDE * 0.62, COL * 0.82))
+    hosts = ordered_hosts(summary["host"].unique())
+    fig, axes = plt.subplots(
+        1, len(hosts), figsize=(WIDE if len(hosts) > 1 else WIDE * 0.62,
+                               COL * 0.86),
+        sharey=True, squeeze=False,
+    )
+    axes = axes.ravel()
     width = 0.8 / len(names)
-    x = np.arange(len(cells))
     hatches = ["", "//", ".."]
+    for ax, host in zip(axes, hosts):
+        hs = summary[summary["host"] == host]
+        cells = [(split, architecture)
+                 for split in ("train", "test")
+                 for architecture in ("dense", "MoE")
+                 if ((hs["split"] == split) &
+                     (hs["architecture"] == architecture)).any()]
+        x = np.arange(len(cells))
+        labels = []
+        for split, architecture in cells:
+            n = int(hs[(hs["split"] == split) &
+                       (hs["architecture"] == architecture)]["n"].iloc[0])
+            labels.append(f"{split}\n{architecture}\n(n={n})")
+        for i, name in enumerate(names):
+            vals = [float(hs[(hs["split"] == split) &
+                             (hs["architecture"] == architecture) &
+                             (hs["model"] == name)]["MAPE_%"].iloc[0])
+                    for split, architecture in cells]
+            bars = ax.bar(x + i * width, vals, width * 0.92, label=name,
+                          color=C[i], edgecolor=SURFACE, linewidth=1.2,
+                          hatch=hatches[i % len(hatches)], zorder=3)
+            for bar, value in zip(bars, vals):
+                ax.text(bar.get_x() + bar.get_width() / 2, value + 1.5,
+                        f"{value:.0f}", ha="center", va="bottom",
+                        fontsize=9, color=INK)
+        ax.set_xticks(x + width * (len(names) - 1) / 2)
+        ax.set_xticklabels(labels)
+        ax.set_title(host_style(host)["label"], fontweight="bold")
+        ax.set_axisbelow(True)
+        ax.grid(axis="x", visible=False)
+        ax.margins(y=0.15)
 
-    for i, name in enumerate(names):
-        vals = [ape(preds[name][m], dec["avg_ts"].to_numpy()[m]).mean() for m in cells]
-        bars = ax.bar(x + i * width, vals, width * 0.92, label=name,
-                      color=C[i], edgecolor=SURFACE, linewidth=1.2,
-                      hatch=hatches[i % len(hatches)], zorder=3)
-        for b, v in zip(bars, vals):
-            ax.text(b.get_x() + b.get_width() / 2, v + 1.5, f"{v:.0f}",
-                    ha="center", va="bottom", fontsize=9, color=INK)
-
-    ax.set_xticks(x + width * (len(names) - 1) / 2)
-    ax.set_xticklabels(labels)
-    ax.set_ylabel("mean absolute percentage error")
-    ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
-    ax.set_axisbelow(True)
-    ax.grid(axis="x", visible=False)
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=3,
-              columnspacing=0.8, handletextpad=0.4)
+    axes[0].set_ylabel("mean absolute percentage error")
+    axes[0].yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
+    axes[0].legend(loc="lower left", bbox_to_anchor=(0.0, 1.08), ncol=3,
+                   columnspacing=0.8, handletextpad=0.4)
     return save(fig, out, "fig2_ablation")
 
 
@@ -233,10 +312,7 @@ def fig_mechanisms(dec, preds, out: Path) -> str:
     # (a) Held-out decode ablation, reported separately by host. Pooling would
     # give the larger Mac cohort twice the weight of RTX and hide the latter's
     # substantially higher error.
-    hosts = sorted(d.loc[held, "host"].unique())
-    host_names = {"lun-mac": "MacBook M4 Max",
-                  "mac-studio-m4-max": "Mac Studio M4 Max",
-                  "rtx5080": "RTX 5080"}
+    hosts = ordered_hosts(d.loc[held, "host"].unique())
     names = list(pred_arrays)
     pretty = {
         "B0 uncalibrated": "B0",
@@ -300,7 +376,7 @@ def fig_mechanisms(dec, preds, out: Path) -> str:
     legend_labels.append("MoE config.")
     ax1.set_xticks(x)
     ax1.set_xticklabels([
-        f"{host_names.get(host, host)}\n({n} configs. × 3 depths)"
+        f"{host_style(host)['label']}\n({n} configs. × 3 depths)"
         for host, n in zip(hosts, model_counts)
     ])
     ax1.set_ylabel("held-out decode MAPE (%)")
@@ -469,8 +545,7 @@ def fig_eta(dec, out: Path) -> str:
     ax.text(len(order) - 0.5, 1.02, "above nominal copy ceiling",
             ha="right", va="bottom", fontsize=9, color=C[1])
 
-    hosts = sorted(d["host"].unique())
-    host_colours = {host: C[i % len(C)] for i, host in enumerate(hosts)}
+    hosts = ordered_hosts(d["host"].unique())
     rng = np.random.default_rng(0)
     for i, q in enumerate(order):
         for hi, host in enumerate(hosts):
@@ -484,21 +559,18 @@ def fig_eta(dec, out: Path) -> str:
                 if mask.any():
                     ax.scatter(centre + jitter[mask], g["eta"].to_numpy()[mask],
                                marker=marker, s=24, facecolors="none",
-                               edgecolors=host_colours[host], linewidths=1.1,
+                               edgecolors=host_style(host)["color"], linewidths=1.1,
                                zorder=4)
             ax.plot([centre - 0.07, centre + 0.07], [g["eta"].median()] * 2,
-                    color=host_colours[host], lw=1.4, zorder=5)
+                    color=host_style(host)["color"], lw=1.4, zorder=5)
 
     ax.set_xticks(range(len(order)))
     ax.set_xticklabels(order, rotation=30, ha="right")
     ax.set_ylabel(r"$\eta$  (fraction of memory roofline)")
     ax.grid(axis="x", visible=False)
     ax.set_axisbelow(True)
-    host_names = {"lun-mac": "MacBook M4 Max",
-                  "mac-studio-m4-max": "Mac Studio M4 Max",
-                  "rtx5080": "RTX 5080"}
-    handles = [Line2D([], [], color=host_colours[h], lw=1.4,
-                      label=host_names.get(h, h)) for h in hosts]
+    handles = [Line2D([], [], color=host_style(h)["color"], lw=1.4,
+                      label=host_style(h)["label"]) for h in hosts]
     handles += [
         Line2D([], [], marker="o", ls="", mfc="none", mec=INK, label="dense"),
         Line2D([], [], marker="s", ls="", mfc="none", mec=INK, label="MoE"),
@@ -519,8 +591,7 @@ def fig_context(dec, out: Path) -> str:
         return ""
 
     fig, ax = plt.subplots(figsize=(COL, COL * 0.8))
-    hosts = sorted(d["host"].unique())
-    host_colours = {host: C[i % len(C)] for i, host in enumerate(hosts)}
+    hosts = ordered_hosts(d["host"].unique())
     for (host, name), g in d.groupby(["host", "model_name"]):
         g = g.sort_values("n_depth")
         base = g[g["n_depth"] == 0]["avg_ts"]
@@ -530,16 +601,13 @@ def fig_context(dec, out: Path) -> str:
         ax.plot(g["n_depth"], g["avg_ts"] / float(base.iloc[0]),
                 marker="s" if moe else "o", ms=3.5,
                 ls="--" if moe else "-", lw=1.0,
-                color=host_colours[host], alpha=0.72, zorder=3)
+                color=host_style(host)["color"], alpha=0.72, zorder=3)
 
     ax.set_xlabel("KV-cache depth (tokens)")
     ax.set_ylabel("throughput relative to empty cache")
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
-    host_names = {"lun-mac": "MacBook M4 Max",
-                  "mac-studio-m4-max": "Mac Studio M4 Max",
-                  "rtx5080": "RTX 5080"}
-    handles = [Line2D([], [], color=host_colours[h], lw=1.4,
-                      label=host_names.get(h, h)) for h in hosts]
+    handles = [Line2D([], [], color=host_style(h)["color"], lw=1.4,
+                      label=host_style(h)["label"]) for h in hosts]
     handles += [
         Line2D([], [], color=INK, marker="o", ms=3.5, label="dense"),
         Line2D([], [], color=INK, marker="s", ms=3.5, ls="--", label="MoE"),
@@ -582,16 +650,15 @@ def fig_quant_ladder(dec, out: Path) -> str:
     g["is_iquant"] = g["quant"].str.upper().str.startswith("IQ")
 
     fig, ax = plt.subplots(figsize=(COL, COL * 0.82))
-    hosts = sorted(g["host"].unique())
-    host_names = {"lun-mac": "MacBook M4 Max",
-                  "mac-studio-m4-max": "Mac Studio M4 Max",
-                  "rtx5080": "RTX 5080"}
-    for i, host in enumerate(hosts):
+    hosts = ordered_hosts(g["host"].unique())
+    for host in hosts:
         hg = g[g["host"] == host].sort_values("bits")
-        ax.plot(hg["bits"], hg["eta"], "-o", color=C[i % len(C)],
+        style = host_style(host)
+        ax.plot(hg["bits"], hg["eta"], marker=style["marker"],
+                ls=style["linestyle"], color=style["color"],
                 lw=1.2, ms=4.5, markeredgecolor=SURFACE,
                 markeredgewidth=0.6, zorder=3,
-                label=host_names.get(host, host))
+                label=style["label"])
     ticks = (g.sort_values("bits").drop_duplicates("quant")
              [["bits", "quant"]])
     ax.set_xticks(ticks["bits"])
@@ -653,27 +720,26 @@ def fig_scope(all_rows, out: Path) -> str:
     ax1.axhline(1.0, color=MUTED, lw=0.8, ls="--", zorder=1)
     ax1.text(-0.35, 1.015, r"$T_dD/B_h=1$", ha="left", va="bottom",
              fontsize=9, color=INK2)
-    host_names = {"lun-mac": "MacBook M4 Max",
-                  "mac-studio-m4-max": "Mac Studio M4 Max",
-                  "rtx5080": "RTX 5080"}
-    for i, host in enumerate(sorted(ladder["host"].unique())):
+    probe_label_available = True
+    for host in ordered_hosts(ladder["host"].unique()):
         hg = (ladder[ladder["host"] == host].set_index("quant")
               .reindex(quant_order))
         present = hg["eta"].notna().to_numpy()
-        marker = "o" if host == "lun-mac" else "s"
-        linestyle = "-" if host == "lun-mac" else "--"
-        ax1.plot(xpos[present], hg.loc[present, "eta"], marker=marker,
-                 linestyle=linestyle,
-                 color=C[i % len(C)], markerfacecolor=C[i % len(C)],
+        style = host_style(host)
+        ax1.plot(xpos[present], hg.loc[present, "eta"],
+                 marker=style["marker"], linestyle=style["linestyle"],
+                 color=style["color"], markerfacecolor=style["color"],
                  markeredgecolor=INK, markeredgewidth=0.5,
-                 label=host_names.get(host, host), zorder=3)
+                 label=style["label"], zorder=3)
         probes = hg["is_calibration_probe"].fillna(False).astype(bool).to_numpy()
         probe_points = present & probes
         if probe_points.any():
             ax1.scatter(xpos[probe_points], hg.loc[probe_points, "eta"],
                         marker="X", s=52, facecolors=SURFACE,
                         edgecolors=INK, linewidths=1.0,
-                        label="M4 reference probe", zorder=5)
+                        label=("M4 reference probe" if probe_label_available
+                               else "_nolegend_"), zorder=5)
+            probe_label_available = False
     ax1.set_xticks(xpos)
     ax1.set_xticklabels(quant_order, rotation=38, ha="right",
                         rotation_mode="anchor")
@@ -689,14 +755,17 @@ def fig_scope(all_rows, out: Path) -> str:
     # (b) Held-out prefill error at the primary and stress-only prefix depths.
     px = np.arange(3, dtype=float)
     ax2.axvspan(-0.25, 0.25, color=C[2], alpha=0.09, zorder=0)
-    for i, (host, row) in enumerate(summary.iterrows()):
+    y_offsets = (7, -14, 19, -24)
+    for i, host in enumerate(ordered_hosts(summary.index)):
+        row = summary.loc[host]
         values = row.to_numpy(float)
-        colour = C[i % len(C)]
-        yoff = 7 if i == 0 else -14
-        ax2.plot(px, values, color=colour, marker="o" if i == 0 else "s",
-                 ls="-" if i == 0 else "--",
+        style = host_style(host)
+        colour = style["color"]
+        yoff = y_offsets[i % len(y_offsets)]
+        ax2.plot(px, values, color=colour, marker=style["marker"],
+                 ls=style["linestyle"],
                  markerfacecolor=SURFACE, markeredgecolor=colour,
-                 markeredgewidth=1.2, label=host_names.get(host, host), zorder=3)
+                 markeredgewidth=1.2, label=style["label"], zorder=3)
         for xi, value in zip(px, values):
             at_right = xi == px[-1]
             ax2.annotate(f"{value:.1f}%", (xi, value),
@@ -771,6 +840,20 @@ def fig_kv_correction(dec, out: Path) -> str:
     return save(fig, out, "fig7_kv_correction")
 
 
+def quality_correlations_by_host(rows: pd.DataFrame) -> dict[str, float]:
+    """Spearman CV/residual correlations, computed within each host."""
+    correlations = {}
+    for host in ordered_hosts(rows["host"].dropna().unique()):
+        group = rows[rows["host"] == host][["cv", "ape"]].dropna()
+        if (len(group) < 2 or group["cv"].nunique() < 2 or
+                group["ape"].nunique() < 2):
+            correlations[host] = float("nan")
+        else:
+            correlations[host] = float(
+                group.corr(method="spearman").iloc[0, 1])
+    return correlations
+
+
 def fig_quality_vs_error(dec, pred, all_rows, out: Path) -> str:
     """Decode residual check plus the phase-specific measurement-quality gap."""
     d = dec.copy()
@@ -786,30 +869,32 @@ def fig_quality_vs_error(dec, pred, all_rows, out: Path) -> str:
 
     fig, (ax, ax2) = plt.subplots(
         1, 2, figsize=(WIDE, 2.72), gridspec_kw={"width_ratios": [1.08, 0.92]})
-    host_names = {"lun-mac": "MacBook M4 Max",
-                  "mac-studio-m4-max": "Mac Studio M4 Max",
-                  "rtx5080": "RTX 5080"}
-    short_names = {"lun-mac": "MB", "mac-studio-m4-max": "MS",
-                   "rtx5080": "RTX"}
-    host_colours = {h: C[i % len(C)] for i, h in enumerate(sorted(d["host"].unique()))}
-    for host in sorted(d["host"].unique()):
-        for split, marker in (("train", "o"), ("test", "^")):
+    for host in ordered_hosts(d["host"].unique()):
+        style = host_style(host)
+        for split, filled in (("train", True), ("test", False)):
             m = ((d["host"] == host) & (d["split"] == split)).to_numpy()
             if m.any():
-                ax.scatter(d["cv"][m], d["ape"][m], s=18, marker=marker,
-                           facecolors=("none" if host == "lun-mac"
-                                       else host_colours[host]),
-                           edgecolors=host_colours[host],
+                ax.scatter(d["cv"][m], d["ape"][m], s=18,
+                           marker=style["marker"],
+                           facecolors=style["color"] if filled else "none",
+                           edgecolors=style["color"],
                            linewidths=0.9,
-                           label=f"{short_names.get(host, host)} {split}",
+                           label=f"{style['short']} {split}",
                            zorder=3)
     ax.axvline(3.0, color=INK2, ls=":", lw=0.9, zorder=2)
-    r = d[["cv", "ape"]].corr(method="spearman").iloc[0, 1]
+    correlations = quality_correlations_by_host(d)
+    correlation_text = "\n".join(
+        f"{host_style(host)['short']} $ρ$=" +
+        (f"{value:.2f}" if np.isfinite(value) else "n/a")
+        for host, value in correlations.items()
+    )
+    ax.text(0.98, 0.98, correlation_text, transform=ax.transAxes,
+            ha="right", va="top", fontsize=9, color=INK2)
     ax.set_xlabel("decode within-run CV (%)")
     ax.set_ylabel("B2 prediction error (APE %)")
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
-    ax.set_title(f"(a) No obvious pooled CV--residual association  ($ρ={r:.2f}$, n={len(d)})",
+    ax.set_title("(a) CV--residual association by host",
                  loc="left", color=INK, fontsize=9, fontweight="bold")
     ax.legend(loc="upper left", ncol=2, fontsize=9,
               columnspacing=0.6, handletextpad=0.25)
@@ -817,29 +902,36 @@ def fig_quality_vs_error(dec, pred, all_rows, out: Path) -> str:
     groups = []
     labels = []
     colours = []
-    for host in sorted(quality["host"].unique()):
-        for phase, colour in (("decode", C[0]), ("prefill", C[1])):
+    markers = []
+    hatches = []
+    for host in ordered_hosts(quality["host"].unique()):
+        style = host_style(host)
+        for phase, hatch in (("decode", ""), ("prefill", "//")):
             values = quality.loc[
                 (quality["host"] == host) & (quality["phase"] == phase), "cv"
             ].to_numpy(float)
             if len(values):
                 groups.append(values)
-                short_host = short_names.get(host, host)
                 short_phase = "D" if phase == "decode" else "P"
-                labels.append(f"{short_host} {short_phase}")
-                colours.append(colour)
+                labels.append(f"{style['short']} {short_phase}")
+                colours.append(style["color"])
+                markers.append(style["marker"])
+                hatches.append(hatch)
     boxes = ax2.boxplot(groups, patch_artist=True, widths=0.52,
                         showfliers=False, medianprops={"color": INK, "lw": 1.0},
                         whiskerprops={"color": INK2, "lw": 0.7},
                         capprops={"color": INK2, "lw": 0.7})
-    for patch, colour in zip(boxes["boxes"], colours):
+    for patch, colour, hatch in zip(boxes["boxes"], colours, hatches):
         patch.set_facecolor(colour)
         patch.set_alpha(0.48)
         patch.set_edgecolor(INK)
         patch.set_linewidth(0.6)
-    for xpos, values, colour in zip(range(1, len(groups) + 1), groups, colours):
+        patch.set_hatch(hatch)
+    for xpos, values, colour, marker in zip(
+            range(1, len(groups) + 1), groups, colours, markers):
         jitter = np.linspace(-0.16, 0.16, len(values))
-        ax2.scatter(xpos + jitter, values, s=5, color=colour, alpha=0.48,
+        ax2.scatter(xpos + jitter, values, s=7, color=colour, marker=marker,
+                    alpha=0.48,
                     edgecolors="none", zorder=3)
         above = int((values > 3.0).sum())
         ax2.text(xpos, 44, f"{above}/{len(values)} >3%", ha="center",
@@ -865,13 +957,15 @@ def fig_offload(dec, out: Path) -> str:
     if d["n_gpu_layers"].nunique() < 3:
         return ""
     fig, ax = plt.subplots(figsize=(COL, COL * 0.8))
-    for i, (name, g) in enumerate(d.groupby("model_name")):
+    for (host, name), g in d.groupby(["host", "model_name"]):
         if g["n_gpu_layers"].nunique() < 3:
             continue
         g = g.sort_values("n_gpu_layers")
         frac = np.minimum(g["n_gpu_layers"] / g["n_layers"], 1.0) * 100
-        ax.plot(frac, g["avg_ts"], marker="o", ms=3.5, color=C[i % len(C)],
-                label=name[:22], zorder=3)
+        style = host_style(host)
+        ax.plot(frac, g["avg_ts"], marker=style["marker"], ms=3.5,
+                ls=style["linestyle"], color=style["color"],
+                label=f"{style['short']}: {name[:18]}", zorder=3)
     ax.set_xlabel("% of layers resident on GPU")
     ax.set_ylabel("decode throughput (tok/s)")
     ax.set_yscale("log")

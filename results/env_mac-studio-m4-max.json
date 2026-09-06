@@ -1,0 +1,19 @@
+{
+  "host": "mac-studio-m4-max",
+  "platform": "Darwin-arm64",
+  "python": "3.12.14+meta [Clang 21.1.6; internal build path redacted]",
+  "llama_bench": "/Users/lun/.local/share/gguf-perf/llama-b10794/llama-bench",
+  "llama_bench_version": "usage: /Users/lun/.local/share/gguf-perf/llama-b10794/llama-bench [options]",
+  "threads": 12,
+  "git_commit": "nogit",
+  "cpu": "arm",
+  "timestamp": "2026-09-05T20:55:10.469798-07:00",
+  "protocol": {
+    "flash_attn": "on (pinned)",
+    "cache_type_k": "f16",
+    "cache_type_v": "f16",
+    "repetitions": 5,
+    "settle_seconds": 45.0,
+    "warmup": "llama-bench default (enabled)"
+  }
+}
